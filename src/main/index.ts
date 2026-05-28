@@ -13,7 +13,6 @@ import {
 } from 'electron'
 import path, { join } from 'path'
 import fs from 'fs'
-import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
 import registerIpcHandlers from './logic/iris-memory-save'
@@ -51,27 +50,37 @@ import registerSecurityVault from './security/Security'
 import registerLockSystem from './security/lock-system'
 import { autoUpdater } from 'electron-updater'
 
-app.commandLine.appendSwitch('use-fake-ui-for-media-stream')
-
-if (process.defaultApp) {
-  if (process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('iris', process.execPath, [path.resolve(process.argv[1])])
-  }
-} else {
-  app.setAsDefaultProtocolClient('iris')
-}
-
-const gotTheLock = app.requestSingleInstanceLock()
-if (!gotTheLock) {
-  app.quit()
-}
-
 let mainWindow: BrowserWindow | null = null
 let isOverlayMode = false
+let secureConfigPath = ''
 
-const secureConfigPath = join(app.getPath('userData'), 'iris_secure_vault.json')
+// These need to be done early but after electron module is ready
+function initializeApp() {
+  try {
+    app.commandLine.appendSwitch('use-fake-ui-for-media-stream')
+
+    if (process.defaultApp) {
+      if (process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient('iris', process.execPath, [path.resolve(process.argv[1])])
+      }
+    } else {
+      app.setAsDefaultProtocolClient('iris')
+    }
+
+    const gotTheLock = app.requestSingleInstanceLock()
+    if (!gotTheLock) {
+      app.quit()
+      return
+    }
+  } catch (e) {
+    // App not ready yet, will try again
+  }
+}
 
 function createWindow(): void {
+  if (!secureConfigPath) {
+    secureConfigPath = join(app.getPath('userData'), 'iris_secure_vault.json')
+  }
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
@@ -105,25 +114,12 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
-
-app.on('second-instance', (event, commandLine) => {
-  if (!event) {
-  }
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
-    const url = commandLine.find((arg) => arg.startsWith('iris://'))
-    if (url) {
-      mainWindow.webContents.send('oauth-callback', url)
-    }
-  }
-})
 
 function toggleOverlayMode() {
   if (!mainWindow) return
@@ -153,7 +149,17 @@ function toggleOverlayMode() {
   isOverlayMode = !isOverlayMode
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const { electronApp, optimizer } = await import('@electron-toolkit/utils')
+  
+  // Initialize app early (register protocol, get lock, append command line switches)
+  initializeApp()
+  
+  // Initialize secure config path
+  if (!secureConfigPath) {
+    secureConfigPath = join(app.getPath('userData'), 'iris_secure_vault.json')
+  }
+  
   electronApp.setAppUserModelId('com.electron')
 
   autoUpdater.autoDownload = true
@@ -342,6 +348,19 @@ app.whenReady().then(() => {
 
   globalShortcut.register('CommandOrControl+Shift+I', () => toggleOverlayMode())
   ipcMain.on('toggle-overlay', () => toggleOverlayMode())
+
+  app.on('second-instance', (event, commandLine) => {
+    if (!event) {
+    }
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+      const url = commandLine.find((arg) => arg.startsWith('iris://'))
+      if (url) {
+        mainWindow.webContents.send('oauth-callback', url)
+      }
+    }
+  })
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
