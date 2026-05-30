@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { themeClasses } from "../utils/themeClasses";
 import {
   Cpu,
   ShieldCheck,
@@ -8,72 +9,82 @@ import {
   Fingerprint,
   Activity,
   Database,
-  Lock
-} from 'lucide-react'
-import { FcGoogle } from 'react-icons/fc'
+  Lock,
+} from "lucide-react";
+import { FcGoogle } from "react-icons/fc";
 
 export default function LoginPage() {
-  const [bootLogs, setBootLogs] = useState<string[]>([])
-  const [isReady, setIsReady] = useState(false)
+  const [bootLogs, setBootLogs] = useState<string[]>([]);
+  const [isReady, setIsReady] = useState(false);
 
   const handleGoogleLogin = () => {
-    window.open(`${import.meta.env.VITE_BACKEND_KEY}/users/google`, '_blank')
-  }
+    window.open(`${import.meta.env.VITE_BACKEND_KEY}/users/google`, "_blank");
+  };
 
   useEffect(() => {
     const sequence = [
-      'SYS_BOOT: INITIATING KERNEL...',
-      'SECURE_ENCLAVE: MOUNTED',
-      'NEURAL_LINK: ESTABLISHING...',
-      'IPC_BRIDGE: [OK]',
-      'LOCAL_VAULT: WAITING FOR DECRYPTION',
-      'AGENTIC_ROUTER: ONLINE',
-      'AWAITING OPERATOR HANDSHAKE...'
-    ]
+      "SYS_BOOT: INITIATING KERNEL...",
+      "SECURE_ENCLAVE: MOUNTED",
+      "NEURAL_LINK: ESTABLISHING...",
+      "IPC_BRIDGE: [OK]",
+      "LOCAL_VAULT: WAITING FOR DECRYPTION",
+      "AGENTIC_ROUTER: ONLINE",
+      "AWAITING OPERATOR HANDSHAKE...",
+    ];
 
-    let currentStep = 0
+    let currentStep = 0;
     const interval = setInterval(() => {
       if (currentStep < sequence.length) {
-        setBootLogs((prev) => [...prev, sequence[currentStep]])
-        currentStep++
+        setBootLogs((prev) => [...prev, sequence[currentStep]]);
+        currentStep++;
       } else {
-        setIsReady(true)
-        clearInterval(interval)
+        setIsReady(true);
+        clearInterval(interval);
       }
-    }, 550)
+    }, 550);
 
-    return () => clearInterval(interval)
-  }, [])
+    return () => clearInterval(interval);
+  }, []);
 
   const containerVariants = {
     hidden: { opacity: 0 },
     show: {
       opacity: 1,
-      transition: { staggerChildren: 0.1, delayChildren: 0.1 }
-    }
-  }
+      transition: { staggerChildren: 0.1, delayChildren: 0.1 },
+    },
+  };
 
   const cardVariants: any = {
     hidden: { opacity: 0, scale: 0.95 },
     show: {
       opacity: 1,
       scale: 1,
-      transition: { type: 'spring', stiffness: 300, damping: 25 }
-    }
-  }
+      transition: { type: "spring", stiffness: 300, damping: 25 },
+    },
+  };
 
   const panelVariants: any = {
     hidden: { opacity: 0, x: -20 },
-    show: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 200, damping: 20 } }
-  }
+    show: {
+      opacity: 1,
+      x: 0,
+      transition: { type: "spring", stiffness: 200, damping: 20 },
+    },
+  };
 
   const rightPanelVariants: any = {
     hidden: { opacity: 0, x: 20 },
-    show: { opacity: 1, x: 0, transition: { type: 'spring', stiffness: 200, damping: 20 } }
-  }
+    show: {
+      opacity: 1,
+      x: 0,
+      transition: { type: "spring", stiffness: 200, damping: 20 },
+    },
+  };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-emerald-50 font-sans flex items-center justify-center p-4 lg:p-8 relative overflow-hidden selection:bg-emerald-500/30 selection:text-emerald-100">
+    <div
+      className={`min-h-screen ${themeClasses.container} ${themeClasses.text.primary} font-sans flex items-center justify-center p-4 lg:p-8 relative overflow-hidden selection:bg-emerald-500/30 selection:text-emerald-100`}
+    >
       <div className="absolute top-[-10%] left-[-5%] w-125 h-125 bg-emerald-600/10 blur-[150px] rounded-full pointer-events-none animate-pulse" />
       <div className="absolute bottom-[-10%] right-[-5%] w-125 h-125 bg-cyan-900/10 blur-[150px] rounded-full pointer-events-none" />
 
@@ -87,7 +98,7 @@ export default function LoginPage() {
       >
         <motion.div
           variants={panelVariants}
-          className="hidden lg:flex col-span-3 flex-col h-125 bg-black/40 backdrop-blur-md border border-white/5 rounded-2xl p-5 shadow-2xl relative overflow-hidden"
+          className={`hidden lg:flex col-span-3 flex-col h-125 ${themeClasses.panelAlt} backdrop-blur-md border ${themeClasses.border.primary} rounded-2xl p-5 shadow-2xl relative overflow-hidden`}
         >
           <div className="flex items-center gap-3 border-b border-white/10 pb-4 mb-4">
             <TerminalSquare className="w-5 h-5 text-emerald-500" />
@@ -102,9 +113,10 @@ export default function LoginPage() {
                   key={index}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className={`mb-2 ${index === bootLogs.length - 1 ? 'text-emerald-400 font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]' : 'text-zinc-500'}`}
+                  className={`mb-2 ${index === bootLogs.length - 1 ? "text-emerald-400 font-bold drop-shadow-[0_0_5px_rgba(16,185,129,0.5)]" : "text-zinc-500"}`}
                 >
-                  <span className="opacity-50 mr-2 text-emerald-700">{`>`}</span> {log}
+                  <span className="opacity-50 mr-2 text-emerald-700">{`>`}</span>{" "}
+                  {log}
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -125,11 +137,13 @@ export default function LoginPage() {
           className="col-span-1 lg:col-span-6 flex flex-col items-center justify-center"
         >
           <div className="text-center mb-10 flex flex-col items-center">
-            <div className="relative inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-black border border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.15)] mb-6 overflow-hidden">
+            <div
+              className={`relative inline-flex items-center justify-center w-20 h-20 rounded-2xl ${themeClasses.panelAlt} border border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.15)] mb-6 overflow-hidden`}
+            >
               <motion.div
                 className="absolute left-0 w-full h-0.5 bg-emerald-400 shadow-[0_0_15px_#34d399]"
-                animate={{ top: ['-10%', '110%', '-10%'] }}
-                transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+                animate={{ top: ["-10%", "110%", "-10%"] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
               />
               <Cpu className="w-10 h-10 text-emerald-400 relative z-10" />
             </div>
@@ -142,14 +156,16 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <div className="w-full max-w-md bg-black/60 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl relative">
+          <div
+            className={`w-full max-w-md ${themeClasses.card} backdrop-blur-xl border ${themeClasses.border.primary} rounded-3xl p-8 shadow-2xl relative`}
+          >
             <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-transparent via-emerald-500 to-transparent opacity-40" />
 
             <div className="mb-8 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-start gap-4">
               <ShieldCheck className="w-6 h-6 text-emerald-400 shrink-0 mt-0.5" />
               <p className="text-xs text-zinc-300 font-mono leading-relaxed">
-                OAuth handshake is processed externally to ensure local vault integrity. The system
-                will bridge upon verification.
+                OAuth handshake is processed externally to ensure local vault
+                integrity. The system will bridge upon verification.
               </p>
             </div>
 
@@ -159,7 +175,7 @@ export default function LoginPage() {
               <button
                 onClick={handleGoogleLogin}
                 disabled={!isReady}
-                className={`relative flex w-full items-center justify-center gap-3 py-4 px-6 rounded-xl bg-black border border-white/40 text-white transition-all duration-200 ease-in-out font-bold text-xs tracking-widest uppercase shadow-lg ${!isReady ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white hover:text-black hover:border-emerald-500/90 cursor-pointer'}`}
+                className={`relative flex w-full items-center justify-center gap-3 py-4 px-6 rounded-xl ${themeClasses.button.secondary} transition-all duration-200 ease-in-out font-bold text-xs tracking-widest uppercase shadow-lg ${!isReady ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <FcGoogle className="w-5 h-5" />
                 Initialize Link
@@ -175,7 +191,7 @@ export default function LoginPage() {
 
         <motion.div
           variants={rightPanelVariants}
-          className="hidden lg:flex col-span-3 flex-col h-125 bg-black/40 backdrop-blur-md border border-white/5 rounded-2xl p-5 shadow-2xl"
+          className={`hidden lg:flex col-span-3 flex-col h-125 ${themeClasses.panelAlt} backdrop-blur-md border ${themeClasses.border.primary} rounded-2xl p-5 shadow-2xl`}
         >
           <div className="flex items-center gap-3 border-b border-white/10 pb-4 mb-6">
             <Activity className="w-5 h-5 text-emerald-500" />
@@ -190,13 +206,15 @@ export default function LoginPage() {
                 <span className="flex items-center gap-2">
                   <Network size={12} /> NETWORK
                 </span>
-                <span className={isReady ? 'text-emerald-400' : 'text-yellow-500'}>
-                  {isReady ? 'SECURE' : 'WAITING'}
+                <span
+                  className={isReady ? "text-emerald-400" : "text-yellow-500"}
+                >
+                  {isReady ? "SECURE" : "WAITING"}
                 </span>
               </div>
               <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-1000 ${isReady ? 'w-full bg-emerald-500' : 'w-1/3 bg-yellow-500 animate-pulse'}`}
+                  className={`h-full transition-all duration-1000 ${isReady ? "w-full bg-emerald-500" : "w-1/3 bg-yellow-500 animate-pulse"}`}
                 />
               </div>
             </div>
@@ -228,12 +246,12 @@ export default function LoginPage() {
 
           <div className="mt-auto p-4 bg-emerald-900/10 border border-emerald-500/20 rounded-xl">
             <p className="text-[9px] text-emerald-400/80 tracking-widest uppercase leading-relaxed">
-              IRIS OS Operates strictly within local environments. External pings are limited to
-              authorized LLM endpoints.
+              IRIS OS Operates strictly within local environments. External
+              pings are limited to authorized LLM endpoints.
             </p>
           </div>
         </motion.div>
       </motion.div>
     </div>
-  )
+  );
 }
