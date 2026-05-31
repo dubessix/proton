@@ -15,6 +15,7 @@ import * as faceapi from "face-api.js";
 import { motion, AnimatePresence } from "framer-motion";
 import gsap from "gsap";
 import { themeClasses } from "../utils/themeClasses";
+import { useThemeStore } from "../store/theme-store";
 
 interface LockScreenProps {
   onUnlock: () => void;
@@ -54,6 +55,13 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
   }, []);
 
   useEffect(() => {
+    // initialize theme (ensures default light mode applied)
+    try {
+      useThemeStore.getState().initTheme();
+    } catch (e) {
+      // ignore in non-browser or test environments
+    }
+
     if (window.electron?.ipcRenderer) {
       window.electron.ipcRenderer
         .invoke("check-vault-status")
@@ -68,7 +76,9 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
       setIsLoading(false);
     }
     return () => stopCamera();
-  }, [authMode, loadNeuralNets, stopCamera]);
+  }, []);
+
+  const theme = useThemeStore((s) => s.theme);
 
   const startHardware = useCallback(async () => {
     try {
@@ -98,24 +108,21 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
     setIsScanning(false);
   }, []);
 
-  const loadNeuralNets = useCallback(
-    async (isFaceSetup: boolean) => {
-      try {
-        setAiStatus("LOADING NEURAL NETS...");
-        const MODEL_URL = "./models";
+  const loadNeuralNets = useCallback(async (isFaceSetup: boolean) => {
+    try {
+      setAiStatus("LOADING NEURAL NETS...");
+      const MODEL_URL = "./models";
 
-        await Promise.all([
-          faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-        ]);
-        startScanning(isFaceSetup);
-      } catch (_err) {
-        setAiStatus("AI OFFLINE - USE PIN BACKUP");
-      }
-    },
-    [startScanning],
-  );
+      await Promise.all([
+        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]);
+      startScanning(isFaceSetup);
+    } catch (_err) {
+      setAiStatus("AI OFFLINE - USE PIN BACKUP");
+    }
+  }, []);
 
   const triggerAccessGranted = useCallback(() => {
     setIsAuthorized(true);
@@ -139,7 +146,7 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
     setTimeout(() => {
       onUnlock();
     }, 3300);
-  };
+  }, [onUnlock, stopCamera]);
 
   const startScanning = useCallback(
     (isFaceSetup: boolean) => {
@@ -155,54 +162,56 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
         )
           return;
 
-      try {
-        const options = new faceapi.SsdMobilenetv1Options({
-          minConfidence: 0.4,
-        });
-        const detection = await faceapi
-          .detectSingleFace(videoRef.current, options)
-          .withFaceLandmarks()
-          .withFaceDescriptor();
+        try {
+          const options = new faceapi.SsdMobilenetv1Options({
+            minConfidence: 0.4,
+          });
+          const detection = await faceapi
+            .detectSingleFace(videoRef.current, options)
+            .withFaceLandmarks()
+            .withFaceDescriptor();
 
-        if (detection) {
-          const descriptorArray = Array.from(detection.descriptor);
+          if (detection) {
+            const descriptorArray = Array.from(detection.descriptor);
 
-          if (isFaceSetup) {
-            clearInterval(scanIntervalRef.current!);
-            setAiStatus("FACE ACQUIRED. ENROLLING BIOMETRICS...");
-            await window.electron.ipcRenderer.invoke(
-              "setup-vault-face",
-              descriptorArray,
-            );
-            setNeedsFaceSetup(false);
-            triggerAccessGranted();
-          } else {
-            setAiStatus("ANALYZING BIOMETRICS...");
-            const isMatch = await window.electron.ipcRenderer.invoke(
-              "verify-vault-face",
-              descriptorArray,
-            );
-
-            if (isMatch) {
+            if (isFaceSetup) {
               clearInterval(scanIntervalRef.current!);
+              setAiStatus("FACE ACQUIRED. ENROLLING BIOMETRICS...");
+              await window.electron.ipcRenderer.invoke(
+                "setup-vault-face",
+                descriptorArray,
+              );
+              setNeedsFaceSetup(false);
               triggerAccessGranted();
             } else {
-              setError(true);
-              setAiStatus("UNKNOWN ENTITY DETECTED");
-              setTimeout(() => {
-                setError(false);
-                setAiStatus("SCANNING FOR AUTHORIZATION...");
-              }, 2500);
+              setAiStatus("ANALYZING BIOMETRICS...");
+              const isMatch = await window.electron.ipcRenderer.invoke(
+                "verify-vault-face",
+                descriptorArray,
+              );
+
+              if (isMatch) {
+                clearInterval(scanIntervalRef.current!);
+                triggerAccessGranted();
+              } else {
+                setError(true);
+                setAiStatus("UNKNOWN ENTITY DETECTED");
+                setTimeout(() => {
+                  setError(false);
+                  setAiStatus("SCANNING FOR AUTHORIZATION...");
+                }, 2500);
+              }
             }
+          } else {
+            if (!error) setAiStatus("NO FACE IN FRAME. ALIGN CENTER.");
           }
-        } else {
-          if (!error) setAiStatus("NO FACE IN FRAME. ALIGN CENTER.");
+        } catch (scanErr) {
+          console.error("Scan error:", scanErr);
         }
-      } catch (scanErr) {
-        console.error("Scan error:", scanErr);
-      }
-    }, 800);
-  }, [error, isAuthorized]);
+      }, 800);
+    },
+    [error, isAuthorized],
+  );
 
   const handlePinChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (error || authMode !== "pin" || isAuthorized) return;
@@ -246,6 +255,18 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
         ? "INITIALIZE VAULT"
         : "SYSTEM LOCKED";
 
+  const bgGradient = error
+    ? theme === "light"
+      ? "from-red-200/40 via-white to-white"
+      : "from-red-900/20 via-[#030303] to-[#030303]"
+    : isAuthorized
+      ? theme === "light"
+        ? "from-emerald-200/40 via-white to-white"
+        : "from-emerald-900/30 via-[#030303] to-[#030303]"
+      : theme === "light"
+        ? "from-emerald-100/30 via-white to-white"
+        : "from-emerald-900/5 via-[#030303] to-[#030303]";
+
   return (
     <div
       className={`flex flex-col items-center justify-center w-screen h-screen ${themeClasses.lockScreenBg} ${themeClasses.lockScreenText} relative overflow-hidden select-none font-sans`}
@@ -254,17 +275,13 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
       }
     >
       <div
-        className={`absolute inset-0 transition-colors duration-700 bg-[radial-gradient(circle_at_center,var(--tw-gradient-stops))] ${
-          error
-            ? "from-red-900/20 via-[#030303] to-[#030303]"
-            : isAuthorized
-              ? "from-emerald-900/30 via-[#030303] to-[#030303]"
-              : "from-emerald-900/5 via-[#030303] to-[#030303]"
-        }`}
+        className={`absolute inset-0 transition-colors duration-700 bg-[radial-gradient(circle_at_center,var(--tw-gradient-stops))] ${bgGradient}`}
       />
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-size-[48px_48px] pointer-events-none mix-blend-screen opacity-50" />
 
-      <div className="absolute top-0 w-full h-12 border-b border-white/5 bg-black/40 backdrop-blur-md flex items-center justify-between px-8 z-50 text-[10px] font-mono tracking-widest text-zinc-500 uppercase">
+      <div
+        className={`absolute top-0 w-full h-12 px-8 z-50 flex items-center justify-between text-[10px] font-mono tracking-widest uppercase ${themeClasses.header}`}
+      >
         <div className="flex items-center gap-6">
           <span className="flex items-center gap-2">
             <RiCpuLine
@@ -282,10 +299,16 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
           </span>
         </div>
         <div className="flex items-center gap-6">
-          <span className="flex items-center gap-2">
+          <span
+            className={`flex items-center gap-2 ${themeClasses.headerText}`}
+          >
             <RiWifiLine size={14} /> LOCALHOST
           </span>
-          <span className="text-white font-bold">{time}</span>
+          <span
+            className={`font-bold ${theme === "light" ? "text-[#1A1C1E]" : "text-white"}`}
+          >
+            {time}
+          </span>
         </div>
       </div>
 

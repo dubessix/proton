@@ -1,9 +1,21 @@
-import { A as RiAddLine, At as RiUserVoiceLine, B as RiCpuLine, C as GiArtificialIntelligence, Ct as RiShieldKeyholeLine, D as require_jsx_runtime, E as AnimatePresence, Et as RiSunLine, It as __toESM, Nt as require_react, O as detectSingleFace, Ot as RiTerminalWindowLine, P as RiBrainLine, R as RiCloudLine, St as RiSettings4Line, T as motion, U as RiDownloadCloud2Line, _t as RiRocketLine, at as RiLock2Line, gt as RiRefreshLine, ht as RiRecordCircleLine, k as nets, kt as RiUserLine, mt as RiPlugLine, ot as RiLockPasswordLine, t as useThemeStore, tt as RiKey2Line, ut as RiMoonLine, vt as RiSave3Line, yt as RiScan2Line } from "./index-Ccw-s9aW.js";
-//#region src/renderer/src/views/Settings.tsx
+import { A as nets, At as RiUserLine, C as themeMap, Ct as RiSettings4Line, D as AnimatePresence, Dt as RiSunLine, E as motion, F as RiBrainLine, Lt as __toESM, O as require_jsx_runtime, Pt as require_react, S as GiArtificialIntelligence, T as useThemeStore, V as RiCpuLine, W as RiDownloadCloud2Line, _t as RiRefreshLine, bt as RiScan2Line, dt as RiMoonLine, gt as RiRecordCircleLine, ht as RiPlugLine, j as RiAddLine, jt as RiUserVoiceLine, k as detectSingleFace, kt as RiTerminalWindowLine, nt as RiKey2Line, ot as RiLock2Line, st as RiLockPasswordLine, vt as RiRocketLine, wt as RiShieldKeyholeLine, yt as RiSave3Line, z as RiCloudLine } from "./index-knnN0Im8.js";
+//#region src/renderer/src/hooks/useTheme.ts
 var import_react = /* @__PURE__ */ __toESM(require_react());
+function useTheme() {
+	const { theme, setTheme, toggleTheme } = useThemeStore();
+	return {
+		theme,
+		colors: themeMap[theme],
+		setTheme,
+		toggleTheme,
+		isDark: theme === "dark",
+		isLight: theme === "light"
+	};
+}
+//#endregion
+//#region src/renderer/src/views/Settings.tsx
 var import_jsx_runtime = require_jsx_runtime();
 var SettingsView = ({ isSystemActive }) => {
-	const { theme, toggleTheme } = useThemeStore();
 	const [activeTab, setActiveTab] = (0, import_react.useState)("updates");
 	const [voice, setVoice] = (0, import_react.useState)(localStorage.getItem("iris_voice_profile") || "MALE");
 	const [personality, setPersonality] = (0, import_react.useState)("");
@@ -143,56 +155,57 @@ var SettingsView = ({ isSystemActive }) => {
 			setTimeout(() => setIsScanningFace(false), 2e3);
 		}
 	};
-	const cardClass = "bg-white dark:bg-[#0f0f13] border border-slate-200 dark:border-white/10 p-6 md:p-8 rounded-2xl flex flex-col gap-5 hover:border-slate-300 dark:hover:border-white/20 transition-all shadow-sm dark:shadow-lg";
-	const inputContainerClass = "flex items-center bg-slate-50 dark:bg-[#050505] border border-slate-300 dark:border-white/10 rounded-lg px-4 py-3 focus-within:border-emerald-300 dark:focus-within:border-white/30 focus-within:bg-white dark:focus-within:bg-black transition-all duration-300 w-full";
-	const titleClass = "text-sm font-semibold text-[#1A1C1E] dark:text-white flex items-center gap-2";
+	const { theme, toggleTheme, isDark } = useTheme();
+	const cardClass = "bg-(--color-surface) border border-(--color-border) p-6 md:p-8 rounded-2xl flex flex-col gap-5 hover:border-white/20 transition-all shadow-lg dark:bg-[#0f0f13] dark:border-white/10";
+	const inputContainerClass = "flex items-center bg-(--color-input-bg) border border-(--color-border) rounded-lg px-4 py-3 focus-within:border-emerald-300 dark:focus-within:border-white/30 focus-within:bg-white dark:focus-within:bg-black transition-all duration-300 w-full dark:bg-[#050505]";
+	const titleClass = "text-sm font-semibold text-(--color-text) dark:text-white flex items-center gap-2";
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-		className: "flex-1 p-6 md:p-10 lg:p-16 flex flex-col items-center bg-[#F5F7FA] dark:bg-black min-h-screen text-[#1A1C1E] dark:text-zinc-100 overflow-y-auto scrollbar-small transition-colors duration-300",
+		className: "flex-1 p-6 md:p-10 lg:p-16 flex flex-col items-center bg-(--color-background) dark:bg-[#030303] min-h-screen text-(--color-text) dark:text-[#E4E6EB] overflow-y-auto scrollbar-small",
 		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(motion.div, {
 			className: "w-full max-w-4xl flex flex-col gap-8",
 			initial: { opacity: 0 },
 			animate: { opacity: 1 },
 			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-200 dark:border-white/10 pb-6",
+				className: "flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/10 pb-6",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "flex items-center gap-5",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "p-4 bg-emerald-100 dark:bg-[#111] rounded-2xl border border-emerald-200 dark:border-white/10 flex items-center justify-center shadow-sm dark:shadow-[0_0_15px_rgba(255,255,255,0.03)]",
+						className: "p-4 bg-[#111] rounded-2xl border border-white/10 flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.03)]",
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(GiArtificialIntelligence, {
 							size: 36,
-							className: "text-emerald-600 dark:text-white"
+							className: "text-white"
 						})
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-						className: "text-3xl font-bold tracking-tight text-[#1A1C1E] dark:text-white",
+						className: "text-3xl font-bold tracking-tight text-white",
 						children: "Command Center"
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-						className: "text-xs text-slate-500 dark:text-zinc-400 font-mono mt-1 tracking-widest flex items-center gap-2 uppercase",
+						className: "text-xs text-zinc-400 font-mono mt-1 tracking-widest flex items-center gap-2 uppercase",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiRecordCircleLine, {
-							className: `${isSystemActive ? "text-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" : "text-slate-400 dark:text-zinc-600"}`,
+							className: `${isSystemActive ? "text-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" : "text-zinc-600"}`,
 							size: 14
 						}), isSystemActive ? "System Online" : "System Offline"]
 					})] })]
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "flex bg-slate-100 dark:bg-[#0a0a0c] p-1 rounded-xl border border-slate-300 dark:border-white/10 w-full md:w-fit shadow-sm dark:shadow-lg overflow-x-auto scrollbar-none",
+					className: "flex bg-[#0a0a0c] p-1 rounded-xl border border-white/10 w-full md:w-fit shadow-lg overflow-x-auto scrollbar-none",
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setActiveTab("updates"),
-							className: `flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "updates" ? "bg-emerald-600 dark:bg-white text-white dark:text-black shadow-md" : "text-slate-600 dark:text-zinc-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5"}`,
+							className: `flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "updates" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`,
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiTerminalWindowLine, { size: 16 }), " SYSTEM"]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setActiveTab("general"),
-							className: `flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "general" ? "bg-emerald-600 dark:bg-white text-white dark:text-black shadow-md" : "text-slate-600 dark:text-zinc-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5"}`,
+							className: `flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "general" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`,
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiSettings4Line, { size: 16 }), " GENERAL"]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setActiveTab("keys"),
-							className: `flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "keys" ? "bg-emerald-600 dark:bg-white text-white dark:text-black shadow-md" : "text-slate-600 dark:text-zinc-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5"}`,
+							className: `flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "keys" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`,
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiPlugLine, { size: 16 }), " API KEYS"]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setActiveTab("security"),
-							className: `flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "security" ? "bg-emerald-600 dark:bg-white text-white dark:text-black shadow-md" : "text-slate-600 dark:text-zinc-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5"}`,
+							className: `flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "security" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`,
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiShieldKeyholeLine, { size: 16 }), " SECURITY"]
 						})
 					]
@@ -311,7 +324,7 @@ var SettingsView = ({ isSystemActive }) => {
 										]
 									})
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "flex-1 bg-[#050505] border border-white/5 rounded-xl p-4 overflow-y-auto max-h-60 scrollbar-small",
+									className: "flex-1 bg-(--color-surfaceVariant) dark:bg-[#050505] border border-(--color-border) dark:border-white/10 rounded-xl p-4 overflow-y-auto max-h-60 scrollbar-small",
 									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", {
 										className: "text-[11px] font-mono text-zinc-400 whitespace-pre-wrap leading-relaxed",
 										children: updateNotes
@@ -360,7 +373,7 @@ var SettingsView = ({ isSystemActive }) => {
 										value: personality,
 										onChange: handlePersonalityChange,
 										placeholder: "Define who IRIS is. Example: 'You are a sassy, highly technical assistant...'",
-										className: "bg-[#050505] border border-white/10 rounded-lg p-4 text-sm text-zinc-200 h-32 resize-none focus:border-white/30 outline-none transition-all scrollbar-small"
+										className: "bg-(--color-surfaceVariant) dark:bg-[#050505] border border-(--color-border) dark:border-white/10 rounded-lg p-4 text-sm text-(--color-text) dark:text-white h-32 resize-none focus:border-white/30 outline-none transition-all scrollbar-small"
 									})]
 								}),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -381,11 +394,52 @@ var SettingsView = ({ isSystemActive }) => {
 											value: userName,
 											onChange: (e) => setUserName(e.target.value),
 											placeholder: "Enter operator name...",
-											className: "bg-transparent border-none outline-none text-sm text-zinc-100 w-full placeholder:text-zinc-600 font-medium"
+											className: "bg-transparent border-none outline-none text-sm text-(--color-text) dark:text-white w-full placeholder:text-zinc-600 font-medium"
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 											onClick: saveUserName,
 											className: "text-zinc-500 hover:text-white transition-colors ml-2",
 											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiSave3Line, { size: 20 })
+										})]
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: `${cardClass} md:col-span-2`,
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex justify-between items-center",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+											className: titleClass,
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiSettings4Line, {
+												className: "text-zinc-400",
+												size: 18
+											}), "Visual Theme"]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "text-xs text-zinc-500 mt-2 max-w-2xl",
+											children: "Toggle between Light mode and Cyberpunk Dark mode. The selected mode is retained on restart."
+										})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											onClick: toggleTheme,
+											className: "inline-flex items-center gap-2 rounded-xl px-5 py-3 bg-(--color-primary) text-white shadow-[0_20px_40px_rgba(0,200,150,0.15)] hover:bg-(--color-primary-dark) transition-colors",
+											children: [isDark ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiSunLine, { size: 18 }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiMoonLine, { size: 18 }), isDark ? "Switch to Light Mode" : "Switch to Dark Mode"]
+										})]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "rounded-2xl border border-(--color-border) bg-(--color-surface) p-4 dark:bg-[#0f0f13]",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+												className: "text-sm font-semibold text-(--color-text)",
+												children: "Current Mode"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+												className: "text-xs text-zinc-500 mt-2",
+												children: theme.toUpperCase()
+											})]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "rounded-2xl border border-(--color-border) bg-(--color-surface) p-4 dark:bg-[#0f0f13]",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+												className: "text-sm font-semibold text-(--color-text)",
+												children: "Persistence"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+												className: "text-xs text-zinc-500 mt-2",
+												children: "Saved in localStorage and re-applied automatically."
+											})]
 										})]
 									})]
 								}),
@@ -410,7 +464,7 @@ var SettingsView = ({ isSystemActive }) => {
 											children: ["FEMALE", "MALE"].map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 												onClick: () => handleVoiceChange(s),
 												disabled: isSystemActive,
-												className: `cursor-pointer flex-1 flex items-center justify-center text-[12px] font-bold rounded-lg transition-all tracking-widest border ${voice === s ? "bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.2)]" : "bg-[#050505] border-white/10 text-zinc-400 hover:text-white hover:border-white/30"}`,
+												className: `cursor-pointer flex-1 flex items-center justify-center text-[12px] font-bold rounded-lg transition-all tracking-widest border ${voice === s ? "bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.2)]" : "bg-(--color-surfaceVariant) border-(--color-border) dark:bg-[#050505] text-zinc-400 hover:text-(--color-text) hover:border-white/30"}`,
 												children: s
 											}, s))
 										}),
@@ -419,35 +473,6 @@ var SettingsView = ({ isSystemActive }) => {
 											title: "Disconnect AI to change voice"
 										})
 									]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: cardClass,
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex justify-between items-center border-b border-white/10 pb-4",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-											className: titleClass,
-											children: [theme === "light" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiSunLine, {
-												className: "text-emerald-400",
-												size: 18
-											}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiMoonLine, {
-												className: "text-cyan-400",
-												size: 18
-											}), "Display Theme"]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-											className: "text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded font-mono font-bold tracking-widest",
-											children: theme.toUpperCase()
-										})]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex flex-col gap-4",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-											className: "text-xs text-zinc-400 leading-relaxed",
-											children: theme === "light" ? "Light Mode: Emerald on frosted glass with excellent readability for daylight and bright environments." : "Dark Mode: Cyberpunk aesthetic with neon accents optimized for low-light and night-time usage."
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-											onClick: toggleTheme,
-											className: `w-full py-3 rounded-lg font-bold tracking-widest text-[12px] flex items-center justify-center gap-2 transition-all border ${theme === "light" ? "bg-blue-900/20 border-blue-500/30 text-blue-300 hover:bg-blue-900/40 hover:border-blue-500/50" : "bg-amber-900/20 border-amber-500/30 text-amber-300 hover:bg-amber-900/40 hover:border-amber-500/50"}`,
-											children: theme === "light" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiMoonLine, { size: 16 }), " SWITCH TO DARK MODE"] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiSunLine, { size: 16 }), " SWITCH TO LIGHT MODE"] })
-										})]
-									})]
 								})
 							]
 						}, "general"),

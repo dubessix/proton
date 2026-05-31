@@ -20,6 +20,7 @@ import { GiTinker } from 'react-icons/gi'
 import { HiComputerDesktop } from 'react-icons/hi2'
 import * as faceapi from 'face-api.js'
 import { VisionMode } from '@renderer/IndexRoot'
+import { themeClasses } from '@renderer/utils/themeClasses'
 
 interface IrisProps {
   isSystemActive: boolean
@@ -314,7 +315,7 @@ export default function DashboardView({
 
           <div
             className={`w-full h-full rounded-xl overflow-hidden bg-black/20 relative border border-white/5 transition-all ${isVideoOn ? 'opacity-100' : 'opacity-30'}`}
-          >
+          >instead.
             <video
               key={visionMode}
               ref={setVideoRef}

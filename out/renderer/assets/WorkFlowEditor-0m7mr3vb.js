@@ -1,4 +1,4 @@
-import { $ as RiGlobalLine, A as RiAddLine, D as require_jsx_runtime, Dt as RiTerminalBoxLine, F as RiCheckLine, G as RiEditBoxLine, H as RiDiscordLine, I as RiChromeLine, It as __toESM, L as RiCloseLine, Mt as require_react_dom, Nt as require_react, P as RiBrainLine, Q as RiGamepadLine, S as getAllApps, St as RiSettings4Line, V as RiDeleteBinLine, X as RiFlashlightLine, _ as sendWhatsAppMessage, a as color, b as performWebSearch, bt as RiSearchLine, c as draftEmail, ct as RiMailLine, d as runTerminal, dt as RiMore2Fill, f as clickOnCoordinate, ft as RiPhoneLine, g as scheduleWhatsAppMessage, h as takeScreenshot, i as rgb_default, it as RiLayoutColumnLine, j as RiArrowDropDownLine, jt as RiVolumeUpLine, l as readEmails, m as setVolume, n as string_default, nt as RiKeyboardLine, o as clsx, p as scrollScreen, pt as RiPlayFill, q as RiFileCopyLine, r as number_default, rt as RiLayoutColumnFill, s as require_with_selector, u as sendEmail, v as closeApp, vt as RiSave3Line, w as createLucideIcon, wt as RiSpotifyLine, x as getMacroSequence, xt as RiServerLine, y as openApp, z as RiCodeLine } from "./index-Ccw-s9aW.js";
+import { $ as RiGamepadLine, B as RiCodeLine, Ct as RiSettings4Line, F as RiBrainLine, H as RiDeleteBinLine, I as RiCheckLine, J as RiFileCopyLine, K as RiEditBoxLine, L as RiChromeLine, Lt as __toESM, M as RiArrowDropDownLine, Mt as RiVolumeUpLine, Nt as require_react_dom, O as require_jsx_runtime, Ot as RiTerminalBoxLine, Pt as require_react, R as RiCloseLine, St as RiServerLine, Tt as RiSpotifyLine, U as RiDiscordLine, Z as RiFlashlightLine, _ as closeApp, a as clsx, at as RiLayoutColumnLine, b as getMacroSequence, c as readEmails, d as clickOnCoordinate, et as RiGlobalLine, f as scrollScreen, ft as RiMore2Fill, g as sendWhatsAppMessage, h as scheduleWhatsAppMessage, i as color, it as RiLayoutColumnFill, j as RiAddLine, l as sendEmail, lt as RiMailLine, m as takeScreenshot, mt as RiPlayFill, n as number_default, o as require_with_selector, p as setVolume, pt as RiPhoneLine, r as rgb_default, rt as RiKeyboardLine, s as draftEmail, t as string_default, u as runTerminal, v as openApp, w as createLucideIcon, x as getAllApps, xt as RiSearchLine, y as performWebSearch, yt as RiSave3Line } from "./index-knnN0Im8.js";
 /**
 * @license lucide-react v1.16.0 - ISC
 *
@@ -9021,7 +9021,7 @@ function ToolNode({ data, id }) {
 	const isTrigger = tool.name === "TRIGGER";
 	const isWait = tool.name === "WAIT";
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "bg-[#18181b] border border-[#27272a] rounded-lg shadow-xl min-w-50 max-w-62.5 font-sans text-[#1A1C1E] dark:text-zinc-100 group transition-all hover:border-emerald-500/50 relative",
+		className: "bg-[#18181b] border border-[#27272a] rounded-lg shadow-xl min-w-50 max-w-62.5 font-sans text-zinc-100 group transition-all hover:border-emerald-500/50 relative",
 		onMouseEnter: () => setIsHovered(true),
 		onMouseLeave: () => setIsHovered(false),
 		children: [
@@ -9047,7 +9047,7 @@ function ToolNode({ data, id }) {
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "flex items-center gap-3",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-						className: "p-1.5 bg-white dark:bg-[#09090b] rounded shadow-inner border border-slate-100 dark:border-white/5",
+						className: "p-1.5 bg-[#09090b] rounded shadow-inner border border-white/5",
 						children: getIcon(tool.name, 18)
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex flex-col",
@@ -9063,11 +9063,11 @@ function ToolNode({ data, id }) {
 					className: `flex flex-col gap-1 transition-opacity duration-200 ${isHovered ? "opacity-100" : "opacity-0"}`,
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						onClick: () => openParameterEditor(id),
-						className: "text-zinc-500 hover:text-emerald-400 bg-white dark:bg-white/40 dark:bg-black/40 p-1 rounded cursor-pointer",
+						className: "text-zinc-500 hover:text-emerald-400 bg-black/40 p-1 rounded cursor-pointer",
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiEditBoxLine, { size: 12 })
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 						onClick: deleteNode,
-						className: "text-zinc-500 hover:text-red-400 bg-white dark:bg-white/40 dark:bg-black/40 p-1 rounded cursor-pointer",
+						className: "text-zinc-500 hover:text-red-400 bg-black/40 p-1 rounded cursor-pointer",
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiDeleteBinLine, { size: 12 })
 					})]
 				})]
@@ -9101,11 +9101,11 @@ function ToolNode({ data, id }) {
 //#endregion
 //#region src/renderer/src/components/ParameterEditorDrawer.tsx
 var SmartIcon = ({ name, size = 16 }) => {
-	if (!name) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: `w-8 h-8 bg-slate-200 dark:bg-zinc-800 rounded-md border border-slate-100 dark:border-white/5` });
+	if (!name) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: `w-8 h-8 bg-zinc-800 rounded-md border border-white/5` });
 	const lower = name.toLowerCase();
 	let icon = /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiTerminalBoxLine, { size });
 	let color = "text-zinc-400";
-	let bg = "bg-slate-200 dark:bg-zinc-800";
+	let bg = "bg-zinc-800";
 	if (lower.includes("chrome") || lower.includes("edge") || lower.includes("brave")) {
 		icon = /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiChromeLine, { size });
 		color = "text-blue-400";
@@ -9128,7 +9128,7 @@ var SmartIcon = ({ name, size = 16 }) => {
 		bg = "bg-purple-500/10";
 	}
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-		className: `w-8 h-8 rounded-md flex items-center justify-center border border-slate-100 dark:border-white/5 ${bg} ${color} shadow-sm shrink-0`,
+		className: `w-8 h-8 rounded-md flex items-center justify-center border border-white/5 ${bg} ${color} shadow-sm shrink-0`,
 		children: icon
 	});
 };
@@ -9182,10 +9182,10 @@ var AppSelector = ({ value, onChange }) => {
 				placeholder: "Search installed apps...",
 				value: searchTerm,
 				onChange: (e) => setSearchTerm(e.target.value),
-				className: "w-full bg-white dark:bg-[#09090b] border border-[#27272a] rounded-md text-xs py-2 pl-9 pr-3 [#1A1C1E] dark:text-white outline-none focus:border-emerald-500 transition-colors placeholder-zinc-700"
+				className: "w-full bg-[#09090b] border border-[#27272a] rounded-md text-xs py-2 pl-9 pr-3 text-white outline-none focus:border-emerald-500 transition-colors placeholder-zinc-700"
 			})]
 		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-			className: "flex flex-col gap-1.5 h-120 overflow-y-auto scrollbar-small bg-white dark:bg-[#09090b] border border-[#27272a] rounded-md p-1.5 w-full shadow-inner",
+			className: "flex flex-col gap-1.5 h-120 overflow-y-auto scrollbar-small bg-[#09090b] border border-[#27272a] rounded-md p-1.5 w-full shadow-inner",
 			children: [
 				loading && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "text-[10px] text-zinc-500 p-2 text-center",
@@ -9200,7 +9200,7 @@ var AppSelector = ({ value, onChange }) => {
 					const isLast = visibleApps.length === index + 1;
 					const AppRow = /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						onClick: () => onChange(app.name),
-						className: `flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all duration-300 transform active:scale-95 group ${isSelected ? "bg-emerald-500/15 border border-emerald-500/60 shadow-[0_0_15px_rgba(16,185,129,0.15)] order-first" : "hover:bg-[#18181b] border border-transparent hover:border-slate-100 dark:border-white/5"}`,
+						className: `flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all duration-300 transform active:scale-95 group ${isSelected ? "bg-emerald-500/15 border border-emerald-500/60 shadow-[0_0_15px_rgba(16,185,129,0.15)] order-first" : "hover:bg-[#18181b] border border-transparent hover:border-white/5"}`,
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "flex items-center gap-3 overflow-hidden",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
@@ -9256,7 +9256,7 @@ function ParameterEditorDrawer({ nodeData, updateNodeInputs, closeEditor }) {
 					children: "Configure Module"
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 					onClick: closeEditor,
-					className: "text-zinc-500 hover:text-red-400 transition-colors cursor-pointer bg-white dark:bg-white/40 dark:bg-black/40 p-1.5 rounded-md",
+					className: "text-zinc-500 hover:text-red-400 transition-colors cursor-pointer bg-black/40 p-1.5 rounded-md",
 					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiCloseLine, { size: 18 })
 				})]
 			}),
@@ -9264,7 +9264,7 @@ function ParameterEditorDrawer({ nodeData, updateNodeInputs, closeEditor }) {
 				className: "p-5 grow overflow-y-auto flex flex-col gap-6 custom-scrollbar scrollbar-small",
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
-						className: "text-sm font-black [#1A1C1E] dark:text-white uppercase tracking-widest mb-1 flex items-center gap-2",
+						className: "text-sm font-black text-white uppercase tracking-widest mb-1 flex items-center gap-2",
 						children: tool.name.replace(/_/g, " ")
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-[10px] text-zinc-500 leading-relaxed font-mono",
@@ -9278,7 +9278,7 @@ function ParameterEditorDrawer({ nodeData, updateNodeInputs, closeEditor }) {
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 							type: "text",
 							placeholder: "e.g., 'Boot up Dev Server'",
-							className: "bg-white dark:bg-[#09090b] border border-[#27272a] rounded-md text-xs p-2.5 [#1A1C1E] dark:text-white outline-none focus:border-emerald-500 transition-colors placeholder-zinc-700 shadow-inner",
+							className: "bg-[#09090b] border border-[#27272a] rounded-md text-xs p-2.5 text-white outline-none focus:border-emerald-500 transition-colors placeholder-zinc-700 shadow-inner",
 							value: localComment,
 							onChange: (e) => setLocalComment(e.target.value)
 						})]
@@ -9298,7 +9298,7 @@ function ParameterEditorDrawer({ nodeData, updateNodeInputs, closeEditor }) {
 								value: localInputs[key] || "",
 								onChange: (val) => handleInputChange(key, val)
 							}) : prop.enum ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("select", {
-								className: "bg-white dark:bg-[#09090b] border border-[#27272a] rounded-md text-xs p-2.5 [#1A1C1E] dark:text-white outline-none focus:border-emerald-500 transition-colors cursor-pointer w-full",
+								className: "bg-[#09090b] border border-[#27272a] rounded-md text-xs p-2.5 text-white outline-none focus:border-emerald-500 transition-colors cursor-pointer w-full",
 								value: localInputs[key] || "",
 								onChange: (e) => handleInputChange(key, e.target.value),
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("option", {
@@ -9311,12 +9311,12 @@ function ParameterEditorDrawer({ nodeData, updateNodeInputs, closeEditor }) {
 							}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
 								type: prop.type === "NUMBER" ? "number" : "text",
 								placeholder: prop.description || "",
-								className: "bg-white dark:bg-[#09090b] border border-[#27272a] rounded-md text-xs p-2.5 [#1A1C1E] dark:text-white outline-none focus:border-emerald-500 transition-colors placeholder-zinc-700 font-mono shadow-inner w-full",
+								className: "bg-[#09090b] border border-[#27272a] rounded-md text-xs p-2.5 text-white outline-none focus:border-emerald-500 transition-colors placeholder-zinc-700 font-mono shadow-inner w-full",
 								value: localInputs[key] || "",
 								onChange: (e) => handleInputChange(key, e.target.value)
 							})]
 						}, key)) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-							className: "text-[10px] text-zinc-600 italic uppercase tracking-widest bg-white dark:bg-black/30 p-2 rounded text-center border border-slate-100 dark:border-white/5",
+							className: "text-[10px] text-zinc-600 italic uppercase tracking-widest bg-black/30 p-2 rounded text-center border border-white/5",
 							children: "No configuration needed."
 						})]
 					})
@@ -9411,9 +9411,9 @@ function MacroManagementMenu({ loadMacroToCanvas }) {
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => handleEdit(macro),
-							className: "w-full text-left flex flex-col gap-1 p-3 rounded-lg hover:bg-slate-200 dark:bg-zinc-800/60 group cursor-pointer border border-transparent hover:border-slate-100 dark:border-white/5",
+							className: "w-full text-left flex flex-col gap-1 p-3 rounded-lg hover:bg-zinc-800/60 group cursor-pointer border border-transparent hover:border-white/5",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: "text-xs font-bold text-[#1A1C1E] dark:text-zinc-100 uppercase tracking-wide group-hover:text-emerald-400",
+								className: "text-xs font-bold text-zinc-100 uppercase tracking-wide group-hover:text-emerald-400",
 								children: macro.name
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 								className: "text-[9px] text-zinc-600 font-mono italic",
@@ -9422,11 +9422,11 @@ function MacroManagementMenu({ loadMacroToCanvas }) {
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 							onClick: () => setActiveWorkflowActions(activeWorkflowActions === macro.name ? null : macro.name),
-							className: "absolute top-3 right-3 p-1 rounded-md text-zinc-700 hover:[#1A1C1E] dark:text-white hover:bg-zinc-700 group cursor-pointer z-10",
+							className: "absolute top-3 right-3 p-1 rounded-md text-zinc-700 hover:text-white hover:bg-zinc-700 group cursor-pointer z-10",
 							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RiMore2Fill, { size: 16 })
 						}),
 						activeWorkflowActions === macro.name && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "absolute top-8 right-2 w-32 bg-white dark:bg-black border border-[#27272a] rounded-lg shadow-xl z-20 p-1 flex flex-col animate-in scale-95 fade-in duration-100",
+							className: "absolute top-8 right-2 w-32 bg-black border border-[#27272a] rounded-lg shadow-xl z-20 p-1 flex flex-col animate-in scale-95 fade-in duration-100",
 							children: [
 								{
 									label: "Edit",
@@ -9446,7 +9446,7 @@ function MacroManagementMenu({ loadMacroToCanvas }) {
 								}
 							].map((btn) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 								onClick: btn.action,
-								className: `flex items-center gap-2 p-2 rounded text-[10px] uppercase font-bold text-zinc-300 hover:bg-slate-200 dark:bg-zinc-800 transition-colors cursor-pointer ${btn.className}`,
+								className: `flex items-center gap-2 p-2 rounded text-[10px] uppercase font-bold text-zinc-300 hover:bg-zinc-800 transition-colors cursor-pointer ${btn.className}`,
 								children: [
 									btn.icon,
 									" ",
@@ -9771,7 +9771,7 @@ function Editor() {
 		}
 	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "flex h-full w-full bg-white dark:bg-[#09090b] relative overflow-hidden",
+		className: "flex h-full w-full bg-[#09090b] relative overflow-hidden",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: `fixed top-14 left-0 h-[calc(100vh-56px)] bg-[#111113] border-r border-[#27272a] p-4 flex flex-col gap-1 transition-all duration-300 ease-in-out z-40 scrollbar-small overflow-auto mt-5 ${isSidebarOpen ? "w-72 opacity-100" : "w-0 opacity-0"}`,
@@ -9790,12 +9790,12 @@ function Editor() {
 							draggable: true,
 							onDragStart: (e) => e.dataTransfer.setData("application/reactflow", tool.name),
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-								className: "p-1.5 bg-white dark:bg-black rounded shadow-inner border border-slate-100 dark:border-white/5",
+								className: "p-1.5 bg-black rounded shadow-inner border border-white/5",
 								children: getIcon(tool.name, 14)
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 								className: "flex flex-col",
 								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-									className: "text-[10px] font-bold tracking-widest text-zinc-300 uppercase group-hover:[#1A1C1E] dark:text-white transition-colors",
+									className: "text-[10px] font-bold tracking-widest text-zinc-300 uppercase group-hover:text-white transition-colors",
 									children: tool.name.replace(/_/g, " ")
 								})
 							})]
@@ -9828,7 +9828,7 @@ function Editor() {
 								type: "text",
 								value: workflowName,
 								onChange: (e) => setWorkflowName(e.target.value),
-								className: "bg-[#18181b] border border-[#27272a] px-4 py-2 rounded-lg text-sm [#1A1C1E] dark:text-white outline-none focus:border-emerald-500 font-bold tracking-wide w-64 shadow-inner"
+								className: "bg-[#18181b] border border-[#27272a] px-4 py-2 rounded-lg text-sm text-white outline-none focus:border-emerald-500 font-bold tracking-wide w-64 shadow-inner"
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 								onClick: runMacroManually,
@@ -9849,7 +9849,7 @@ function Editor() {
 						onEdgesChange,
 						onConnect,
 						nodeTypes,
-						className: "bg-white dark:bg-[#09090b]",
+						className: "bg-[#09090b]",
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Background$1, {
 							color: "#27272a",
 							gap: 20,

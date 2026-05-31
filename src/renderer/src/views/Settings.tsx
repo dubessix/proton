@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import * as faceapi from 'face-api.js'
-import { GiArtificialIntelligence } from 'react-icons/gi'
+import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import * as faceapi from "face-api.js";
+import { GiArtificialIntelligence } from "react-icons/gi";
 import {
   RiKey2Line,
   RiSave3Line,
@@ -21,210 +21,247 @@ import {
   RiTerminalWindowLine,
   RiRefreshLine,
   RiDownloadCloud2Line,
-  RiRocketLine
-} from 'react-icons/ri'
+  RiRocketLine,
+  RiMoonLine,
+  RiSunLine,
+} from "react-icons/ri";
+import { useTheme } from "../hooks/useTheme";
 
 interface SettingsProps {
-  isSystemActive: boolean
+  isSystemActive: boolean;
 }
 
-type TabType = 'updates' | 'general' | 'keys' | 'security'
+type TabType = "updates" | "general" | "keys" | "security";
 
 const SettingsView = ({ isSystemActive }: SettingsProps) => {
-  const [activeTab, setActiveTab] = useState<TabType>('updates')
+  const [activeTab, setActiveTab] = useState<TabType>("updates");
 
-  const [voice, setVoice] = useState<'MALE' | 'FEMALE'>(
-    (localStorage.getItem('iris_voice_profile') as 'MALE' | 'FEMALE') || 'MALE'
-  )
-  const [personality, setPersonality] = useState('')
-  const [userName, setUserName] = useState(localStorage.getItem('iris_user_name') || '')
+  const [voice, setVoice] = useState<"MALE" | "FEMALE">(
+    (localStorage.getItem("iris_voice_profile") as "MALE" | "FEMALE") || "MALE",
+  );
+  const [personality, setPersonality] = useState("");
+  const [userName, setUserName] = useState(
+    localStorage.getItem("iris_user_name") || "",
+  );
 
-  const [geminiKey, setGeminiKey] = useState(localStorage.getItem('iris_custom_api_key') || '')
-  const [groqKey, setGroqKey] = useState(localStorage.getItem('iris_groq_api_key') || '')
-  const [hfKey, setHfKey] = useState(localStorage.getItem('iris_hf_api_key') || '')
-  const [tailvyKey, setTailvyKey] = useState(localStorage.getItem('iris_tailvy_api_key') || '')
+  const [geminiKey, setGeminiKey] = useState(
+    localStorage.getItem("iris_custom_api_key") || "",
+  );
+  const [groqKey, setGroqKey] = useState(
+    localStorage.getItem("iris_groq_api_key") || "",
+  );
+  const [hfKey, setHfKey] = useState(
+    localStorage.getItem("iris_hf_api_key") || "",
+  );
+  const [tailvyKey, setTailvyKey] = useState(
+    localStorage.getItem("iris_tailvy_api_key") || "",
+  );
 
-  const [isSecurityUnlocked, setIsSecurityUnlocked] = useState(false)
-  const [authPin, setAuthPin] = useState('')
-  const [authError, setAuthError] = useState(false)
+  const [isSecurityUnlocked, setIsSecurityUnlocked] = useState(false);
+  const [authPin, setAuthPin] = useState("");
+  const [authError, setAuthError] = useState(false);
 
-  const [newPin, setNewPin] = useState('')
-  const [faceCount, setFaceCount] = useState(0)
+  const [newPin, setNewPin] = useState("");
+  const [faceCount, setFaceCount] = useState(0);
 
-  const [isScanningFace, setIsScanningFace] = useState(false)
-  const [enrollStatus, setEnrollStatus] = useState('')
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isScanningFace, setIsScanningFace] = useState(false);
+  const [enrollStatus, setEnrollStatus] = useState("");
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-  const [appVersion, setAppVersion] = useState('1.3.0')
+  const [appVersion, setAppVersion] = useState("1.3.0");
   const [updateStatus, setUpdateStatus] = useState<
-    'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error'
-  >('idle')
-  const [updateVersion, setUpdateVersion] = useState('')
-  const [updateNotes, setUpdateNotes] = useState('No new updates detected.')
-  const [downloadProgress, setDownloadProgress] = useState(0)
+    "idle" | "checking" | "available" | "downloading" | "ready" | "error"
+  >("idle");
+  const [updateVersion, setUpdateVersion] = useState("");
+  const [updateNotes, setUpdateNotes] = useState("No new updates detected.");
+  const [downloadProgress, setDownloadProgress] = useState(0);
 
   useEffect(() => {
     if (window.electron?.ipcRenderer) {
-      window.electron.ipcRenderer.invoke('get-personality').then((res) => {
-        if (res) setPersonality(res)
-      })
+      window.electron.ipcRenderer.invoke("get-personality").then((res) => {
+        if (res) setPersonality(res);
+      });
       window.electron.ipcRenderer
-        .invoke('check-vault-status')
-        .then((res) => setFaceCount(res?.faceCount || 0))
+        .invoke("check-vault-status")
+        .then((res) => setFaceCount(res?.faceCount || 0));
 
-      window.electron.ipcRenderer.invoke('get-app-version').then((v) => setAppVersion(v))
+      window.electron.ipcRenderer
+        .invoke("get-app-version")
+        .then((v) => setAppVersion(v));
 
-      window.electron.ipcRenderer.on('updater-event', (_e, { status, data, error }) => {
-        if (status === 'checking') setUpdateStatus('checking')
-        if (status === 'available') {
-          setUpdateStatus('available')
-          setUpdateVersion(data.version)
-          setUpdateNotes(data.releaseNotes || 'Bug fixes and performance improvements.')
-        }
-        if (status === 'not-available') {
-          setUpdateStatus('idle')
-          setUpdateNotes('System is up to date.')
-        }
-        if (status === 'downloading') {
-          setUpdateStatus('downloading')
-          setDownloadProgress(Math.round(data.percent))
-        }
-        if (status === 'downloaded') setUpdateStatus('ready')
-        if (status === 'error') {
-          setUpdateStatus('error')
-          setUpdateNotes(`Error: ${error}`)
-        }
-      })
+      window.electron.ipcRenderer.on(
+        "updater-event",
+        (_e, { status, data, error }) => {
+          if (status === "checking") setUpdateStatus("checking");
+          if (status === "available") {
+            setUpdateStatus("available");
+            setUpdateVersion(data.version);
+            setUpdateNotes(
+              data.releaseNotes || "Bug fixes and performance improvements.",
+            );
+          }
+          if (status === "not-available") {
+            setUpdateStatus("idle");
+            setUpdateNotes("System is up to date.");
+          }
+          if (status === "downloading") {
+            setUpdateStatus("downloading");
+            setDownloadProgress(Math.round(data.percent));
+          }
+          if (status === "downloaded") setUpdateStatus("ready");
+          if (status === "error") {
+            setUpdateStatus("error");
+            setUpdateNotes(`Error: ${error}`);
+          }
+        },
+      );
     }
     return () => {
       if (window.electron?.ipcRenderer)
-        window.electron.ipcRenderer.removeAllListeners('updater-event')
-    }
-  }, [])
+        window.electron.ipcRenderer.removeAllListeners("updater-event");
+    };
+  }, []);
 
-  const checkForUpdates = () => window.electron.ipcRenderer.invoke('check-for-updates')
-  const downloadUpdate = () => window.electron.ipcRenderer.invoke('download-update')
-  const installUpdate = () => window.electron.ipcRenderer.invoke('install-update')
+  const checkForUpdates = () =>
+    window.electron.ipcRenderer.invoke("check-for-updates");
+  const downloadUpdate = () =>
+    window.electron.ipcRenderer.invoke("download-update");
+  const installUpdate = () =>
+    window.electron.ipcRenderer.invoke("install-update");
 
-  const handleVoiceChange = (v: 'MALE' | 'FEMALE') => {
-    if (isSystemActive) return
-    setVoice(v)
-    localStorage.setItem('iris_voice_profile', v)
-  }
+  const handleVoiceChange = (v: "MALE" | "FEMALE") => {
+    if (isSystemActive) return;
+    setVoice(v);
+    localStorage.setItem("iris_voice_profile", v);
+  };
 
-  const handlePersonalityChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const text = e.target.value
+  const handlePersonalityChange = (
+    e: React.ChangeEvent<HTMLTextAreaElement>,
+  ) => {
+    const text = e.target.value;
     const words = text
       .trim()
       .split(/\s+/)
-      .filter((w) => w.length > 0)
-    if (words.length <= 150) setPersonality(text)
-  }
+      .filter((w) => w.length > 0);
+    if (words.length <= 150) setPersonality(text);
+  };
 
   const savePersonality = async () => {
     if (window.electron?.ipcRenderer) {
-      await window.electron.ipcRenderer.invoke('set-personality', personality)
-      alert('Personality Matrix Saved Securely to OS.')
+      await window.electron.ipcRenderer.invoke("set-personality", personality);
+      alert("Personality Matrix Saved Securely to OS.");
     }
-  }
+  };
 
   const saveUserName = () => {
-    localStorage.setItem('iris_user_name', userName)
-    alert('User Designation Saved.')
-  }
+    localStorage.setItem("iris_user_name", userName);
+    alert("User Designation Saved.");
+  };
 
   const saveApiKeys = async () => {
-    localStorage.setItem('iris_custom_api_key', geminiKey)
-    localStorage.setItem('iris_groq_api_key', groqKey)
-    localStorage.setItem('iris_hf_api_key', hfKey)
-    localStorage.setItem('iris_tailvy_api_key', tailvyKey)
+    localStorage.setItem("iris_custom_api_key", geminiKey);
+    localStorage.setItem("iris_groq_api_key", groqKey);
+    localStorage.setItem("iris_hf_api_key", hfKey);
+    localStorage.setItem("iris_tailvy_api_key", tailvyKey);
 
     if (window.electron?.ipcRenderer) {
       try {
-        await window.electron.ipcRenderer.invoke('secure-save-keys', { groqKey, geminiKey })
+        await window.electron.ipcRenderer.invoke("secure-save-keys", {
+          groqKey,
+          geminiKey,
+        });
       } catch (e) {}
     }
     alert(
-      'All Neural Uplinks (API Keys) secured locally and in OS Vault. Restart AI modules to apply.'
-    )
-  }
+      "All Neural Uplinks (API Keys) secured locally and in OS Vault. Restart AI modules to apply.",
+    );
+  };
 
   const currentWordCount = personality
     .trim()
     .split(/\s+/)
-    .filter((w) => w.length > 0).length
+    .filter((w) => w.length > 0).length;
 
   const unlockSecurityModule = async () => {
-    if (!window.electron?.ipcRenderer) return
-    const isValid = await window.electron.ipcRenderer.invoke('verify-vault-pin', authPin)
+    if (!window.electron?.ipcRenderer) return;
+    const isValid = await window.electron.ipcRenderer.invoke(
+      "verify-vault-pin",
+      authPin,
+    );
     if (isValid) {
-      setIsSecurityUnlocked(true)
-      setAuthPin('')
+      setIsSecurityUnlocked(true);
+      setAuthPin("");
     } else {
-      setAuthError(true)
-      setTimeout(() => setAuthError(false), 1000)
+      setAuthError(true);
+      setTimeout(() => setAuthError(false), 1000);
     }
-  }
+  };
 
   const updateMasterPin = async () => {
-    if (newPin.length !== 4 || !window.electron?.ipcRenderer) return
-    await window.electron.ipcRenderer.invoke('setup-vault-pin', newPin)
-    setNewPin('')
-    alert('Master PIN Updated Successfully.')
-  }
+    if (newPin.length !== 4 || !window.electron?.ipcRenderer) return;
+    await window.electron.ipcRenderer.invoke("setup-vault-pin", newPin);
+    setNewPin("");
+    alert("Master PIN Updated Successfully.");
+  };
 
   const startFaceEnrollment = async () => {
-    setIsScanningFace(true)
-    setEnrollStatus('INITIALIZING CAMERA...')
+    setIsScanningFace(true);
+    setEnrollStatus("INITIALIZING CAMERA...");
     try {
       await Promise.all([
-        faceapi.nets.ssdMobilenetv1.loadFromUri('./models'),
-        faceapi.nets.faceLandmark68Net.loadFromUri('./models'),
-        faceapi.nets.faceRecognitionNet.loadFromUri('./models')
-      ])
+        faceapi.nets.ssdMobilenetv1.loadFromUri("./models"),
+        faceapi.nets.faceLandmark68Net.loadFromUri("./models"),
+        faceapi.nets.faceRecognitionNet.loadFromUri("./models"),
+      ]);
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        setEnrollStatus('POSITION FACE IN FRAME')
+        videoRef.current.srcObject = stream;
+        setEnrollStatus("POSITION FACE IN FRAME");
 
         const scanInterval = setInterval(async () => {
-          if (!videoRef.current || videoRef.current.readyState !== 4) return
+          if (!videoRef.current || videoRef.current.readyState !== 4) return;
           const detection = await faceapi
             .detectSingleFace(videoRef.current)
             .withFaceLandmarks()
-            .withFaceDescriptor()
+            .withFaceDescriptor();
 
           if (detection) {
-            clearInterval(scanInterval)
-            setEnrollStatus('FACE ACQUIRED. ENCRYPTING...')
-            const descriptorArray = Array.from(detection.descriptor)
+            clearInterval(scanInterval);
+            setEnrollStatus("FACE ACQUIRED. ENCRYPTING...");
+            const descriptorArray = Array.from(detection.descriptor);
 
             if (window.electron?.ipcRenderer) {
-              await window.electron.ipcRenderer.invoke('setup-vault-face', descriptorArray)
+              await window.electron.ipcRenderer.invoke(
+                "setup-vault-face",
+                descriptorArray,
+              );
             }
 
-            stream.getTracks().forEach((t) => t.stop())
-            setIsScanningFace(false)
-            setFaceCount((prev) => prev + 1)
-            alert('New Biometric Identity Saved.')
+            stream.getTracks().forEach((t) => t.stop());
+            setIsScanningFace(false);
+            setFaceCount((prev) => prev + 1);
+            alert("New Biometric Identity Saved.");
           }
-        }, 1000)
+        }, 1000);
       }
     } catch (e) {
-      setEnrollStatus('CAMERA ERROR')
-      setTimeout(() => setIsScanningFace(false), 2000)
+      setEnrollStatus("CAMERA ERROR");
+      setTimeout(() => setIsScanningFace(false), 2000);
     }
-  }
+  };
+
+  const { theme, toggleTheme, isDark } = useTheme();
 
   const cardClass =
-    'bg-[#0f0f13] border border-white/10 p-6 md:p-8 rounded-2xl flex flex-col gap-5 hover:border-white/20 transition-all shadow-lg'
+    "bg-(--color-surface) border border-(--color-border) p-6 md:p-8 rounded-2xl flex flex-col gap-5 hover:border-white/20 transition-all shadow-lg dark:bg-[#0f0f13] dark:border-white/10";
   const inputContainerClass =
-    'flex items-center bg-[#050505] border border-white/10 rounded-lg px-4 py-3 focus-within:border-white/30 focus-within:bg-black transition-all duration-300 w-full'
-  const titleClass = 'text-sm font-semibold text-white flex items-center gap-2'
+    "flex items-center bg-(--color-input-bg) border border-(--color-border) rounded-lg px-4 py-3 focus-within:border-emerald-300 dark:focus-within:border-white/30 focus-within:bg-white dark:focus-within:bg-black transition-all duration-300 w-full dark:bg-[#050505]";
+  const titleClass =
+    "text-sm font-semibold text-(--color-text) dark:text-white flex items-center gap-2";
 
   return (
-    <div className="flex-1 p-6 md:p-10 lg:p-16 flex flex-col items-center bg-black min-h-screen text-zinc-100 overflow-y-auto scrollbar-small">
+    <div className="flex-1 p-6 md:p-10 lg:p-16 flex flex-col items-center bg-(--color-background) dark:bg-[#030303] min-h-screen text-(--color-text) dark:text-[#E4E6EB] overflow-y-auto scrollbar-small">
       <motion.div
         className="w-full max-w-4xl flex flex-col gap-8"
         initial={{ opacity: 0 }}
@@ -236,39 +273,41 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
               <GiArtificialIntelligence size={36} className="text-white" />
             </div>
             <div>
-              <h2 className="text-3xl font-bold tracking-tight text-white">Command Center</h2>
+              <h2 className="text-3xl font-bold tracking-tight text-white">
+                Command Center
+              </h2>
               <p className="text-xs text-zinc-400 font-mono mt-1 tracking-widest flex items-center gap-2 uppercase">
                 <RiRecordCircleLine
-                  className={`${isSystemActive ? 'text-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]' : 'text-zinc-600'}`}
+                  className={`${isSystemActive ? "text-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" : "text-zinc-600"}`}
                   size={14}
                 />
-                {isSystemActive ? 'System Online' : 'System Offline'}
+                {isSystemActive ? "System Online" : "System Offline"}
               </p>
             </div>
           </div>
 
           <div className="flex bg-[#0a0a0c] p-1 rounded-xl border border-white/10 w-full md:w-fit shadow-lg overflow-x-auto scrollbar-none">
             <button
-              onClick={() => setActiveTab('updates')}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === 'updates' ? 'bg-white text-black shadow-md' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+              onClick={() => setActiveTab("updates")}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "updates" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}
             >
               <RiTerminalWindowLine size={16} /> SYSTEM
             </button>
             <button
-              onClick={() => setActiveTab('general')}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === 'general' ? 'bg-white text-black shadow-md' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+              onClick={() => setActiveTab("general")}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "general" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}
             >
               <RiSettings4Line size={16} /> GENERAL
             </button>
             <button
-              onClick={() => setActiveTab('keys')}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === 'keys' ? 'bg-white text-black shadow-md' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+              onClick={() => setActiveTab("keys")}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "keys" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}
             >
               <RiPlugLine size={16} /> API KEYS
             </button>
             <button
-              onClick={() => setActiveTab('security')}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === 'security' ? 'bg-white text-black shadow-md' : 'text-zinc-500 hover:text-white hover:bg-white/5'}`}
+              onClick={() => setActiveTab("security")}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "security" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}
             >
               <RiShieldKeyholeLine size={16} /> SECURITY
             </button>
@@ -277,7 +316,7 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
 
         <div className="relative min-h-125 pb-12 mt-2">
           <AnimatePresence mode="wait">
-            {activeTab === 'updates' && (
+            {activeTab === "updates" && (
               <motion.div
                 key="updates"
                 initial={{ opacity: 0, y: 10 }}
@@ -286,10 +325,13 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                 transition={{ duration: 0.2 }}
                 className="grid grid-cols-1 md:grid-cols-2 gap-6 absolute w-full"
               >
-                <div className={`${cardClass} md:col-span-1 border-emerald-500/20`}>
+                <div
+                  className={`${cardClass} md:col-span-1 border-emerald-500/20`}
+                >
                   <div className="flex justify-between items-center border-b border-white/10 pb-4">
                     <span className={titleClass}>
-                      <RiRocketLine className="text-emerald-400" size={18} /> OS Firmware
+                      <RiRocketLine className="text-emerald-400" size={18} /> OS
+                      Firmware
                     </span>
                     <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded font-mono font-bold tracking-widest">
                       v{appVersion}
@@ -297,10 +339,15 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                   </div>
 
                   <div className="flex flex-col gap-4 items-center justify-center flex-1 py-4 text-center">
-                    {updateStatus === 'idle' || updateStatus === 'error' ? (
+                    {updateStatus === "idle" || updateStatus === "error" ? (
                       <>
-                        <RiTerminalWindowLine size={48} className="text-zinc-700" />
-                        <p className="text-xs text-zinc-400 font-mono">Current build is stable.</p>
+                        <RiTerminalWindowLine
+                          size={48}
+                          className="text-zinc-700"
+                        />
+                        <p className="text-xs text-zinc-400 font-mono">
+                          Current build is stable.
+                        </p>
                         <button
                           onClick={checkForUpdates}
                           className="mt-2 w-full py-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold tracking-widest text-[11px] flex items-center justify-center gap-2 transition-all cursor-pointer"
@@ -308,16 +355,22 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                           <RiRefreshLine size={16} /> CHECK FOR UPDATES
                         </button>
                       </>
-                    ) : updateStatus === 'checking' ? (
+                    ) : updateStatus === "checking" ? (
                       <>
-                        <RiRefreshLine size={48} className="text-emerald-500 animate-spin" />
+                        <RiRefreshLine
+                          size={48}
+                          className="text-emerald-500 animate-spin"
+                        />
                         <p className="text-xs text-emerald-400 font-mono animate-pulse">
                           PINGING NEURAL NETWORK...
                         </p>
                       </>
-                    ) : updateStatus === 'available' ? (
+                    ) : updateStatus === "available" ? (
                       <>
-                        <RiDownloadCloud2Line size={48} className="text-cyan-400" />
+                        <RiDownloadCloud2Line
+                          size={48}
+                          className="text-cyan-400"
+                        />
                         <p className="text-xs text-cyan-400 font-mono">
                           NEW BUILD FOUND: v{updateVersion}
                         </p>
@@ -328,7 +381,7 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                           <RiDownloadCloud2Line size={16} /> INITIALIZE DOWNLOAD
                         </button>
                       </>
-                    ) : updateStatus === 'downloading' ? (
+                    ) : updateStatus === "downloading" ? (
                       <div className="w-full flex flex-col gap-3">
                         <div className="flex justify-between text-[10px] font-mono text-zinc-400">
                           <span>DOWNLOADING PATCH...</span>
@@ -343,8 +396,13 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                       </div>
                     ) : (
                       <>
-                        <RiRecordCircleLine size={48} className="text-emerald-400 animate-pulse" />
-                        <p className="text-xs text-emerald-400 font-mono">PATCH DOWNLOADED</p>
+                        <RiRecordCircleLine
+                          size={48}
+                          className="text-emerald-400 animate-pulse"
+                        />
+                        <p className="text-xs text-emerald-400 font-mono">
+                          PATCH DOWNLOADED
+                        </p>
                         <button
                           onClick={installUpdate}
                           className="mt-2 w-full py-3 rounded-lg bg-emerald-500 text-black font-bold tracking-widest text-[11px] flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(16,185,129,0.4)] cursor-pointer"
@@ -359,10 +417,14 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                 <div className={`${cardClass} md:col-span-1`}>
                   <div className="flex justify-between items-center border-b border-white/10 pb-4">
                     <span className={titleClass}>
-                      <RiTerminalWindowLine className="text-zinc-400" size={18} /> Patch Notes
+                      <RiTerminalWindowLine
+                        className="text-zinc-400"
+                        size={18}
+                      />{" "}
+                      Patch Notes
                     </span>
                   </div>
-                  <div className="flex-1 bg-[#050505] border border-white/5 rounded-xl p-4 overflow-y-auto max-h-60 scrollbar-small">
+                  <div className="flex-1 bg-(--color-surfaceVariant) dark:bg-[#050505] border border-(--color-border) dark:border-white/10 rounded-xl p-4 overflow-y-auto max-h-60 scrollbar-small">
                     <pre className="text-[11px] font-mono text-zinc-400 whitespace-pre-wrap leading-relaxed">
                       {updateNotes}
                     </pre>
@@ -372,7 +434,7 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
             )}
 
             {/* --- TAB 2: GENERAL --- */}
-            {activeTab === 'general' && (
+            {activeTab === "general" && (
               <motion.div
                 key="general"
                 initial={{ opacity: 0, y: 10 }}
@@ -384,11 +446,12 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                 <div className={`${cardClass} md:col-span-2`}>
                   <div className="flex justify-between items-center">
                     <span className={titleClass}>
-                      <RiUserLine className="text-zinc-400" size={18} /> AI Personality Matrix
+                      <RiUserLine className="text-zinc-400" size={18} /> AI
+                      Personality Matrix
                     </span>
                     <div className="flex items-center gap-4">
                       <span
-                        className={`text-[10px] font-mono tracking-widest ${currentWordCount >= 150 ? 'text-red-400' : 'text-zinc-400'}`}
+                        className={`text-[10px] font-mono tracking-widest ${currentWordCount >= 150 ? "text-red-400" : "text-zinc-400"}`}
                       >
                         {currentWordCount} / 150 WORDS
                       </span>
@@ -404,14 +467,15 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                     value={personality}
                     onChange={handlePersonalityChange}
                     placeholder="Define who IRIS is. Example: 'You are a sassy, highly technical assistant...'"
-                    className="bg-[#050505] border border-white/10 rounded-lg p-4 text-sm text-zinc-200 h-32 resize-none focus:border-white/30 outline-none transition-all scrollbar-small"
+                    className="bg-(--color-surfaceVariant) dark:bg-[#050505] border border-(--color-border) dark:border-white/10 rounded-lg p-4 text-sm text-(--color-text) dark:text-white h-32 resize-none focus:border-white/30 outline-none transition-all scrollbar-small"
                   />
                 </div>
 
                 <div className={cardClass}>
                   <div className="flex justify-between items-end">
                     <span className={titleClass}>
-                      <RiUserLine className="text-zinc-400" size={18} /> User Designation
+                      <RiUserLine className="text-zinc-400" size={18} /> User
+                      Designation
                     </span>
                   </div>
                   <div className={inputContainerClass}>
@@ -420,7 +484,7 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                       value={userName}
                       onChange={(e) => setUserName(e.target.value)}
                       placeholder="Enter operator name..."
-                      className="bg-transparent border-none outline-none text-sm text-zinc-100 w-full placeholder:text-zinc-600 font-medium"
+                      className="bg-transparent border-none outline-none text-sm text-(--color-text) dark:text-white w-full placeholder:text-zinc-600 font-medium"
                     />
                     <button
                       onClick={saveUserName}
@@ -431,10 +495,55 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                   </div>
                 </div>
 
+                <div className={`${cardClass} md:col-span-2`}>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <span className={titleClass}>
+                        <RiSettings4Line className="text-zinc-400" size={18} />
+                        Visual Theme
+                      </span>
+                      <p className="text-xs text-zinc-500 mt-2 max-w-2xl">
+                        Toggle between Light mode and Cyberpunk Dark mode. The
+                        selected mode is retained on restart.
+                      </p>
+                    </div>
+                    <button
+                      onClick={toggleTheme}
+                      className="inline-flex items-center gap-2 rounded-xl px-5 py-3 bg-(--color-primary) text-white shadow-[0_20px_40px_rgba(0,200,150,0.15)] hover:bg-(--color-primary-dark) transition-colors"
+                    >
+                      {isDark ? (
+                        <RiSunLine size={18} />
+                      ) : (
+                        <RiMoonLine size={18} />
+                      )}
+                      {isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    <div className="rounded-2xl border border-(--color-border) bg-(--color-surface) p-4 dark:bg-[#0f0f13]">
+                      <p className="text-sm font-semibold text-(--color-text)">
+                        Current Mode
+                      </p>
+                      <p className="text-xs text-zinc-500 mt-2">
+                        {theme.toUpperCase()}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl border border-(--color-border) bg-(--color-surface) p-4 dark:bg-[#0f0f13]">
+                      <p className="text-sm font-semibold text-(--color-text)">
+                        Persistence
+                      </p>
+                      <p className="text-xs text-zinc-500 mt-2">
+                        Saved in localStorage and re-applied automatically.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className={`${cardClass} relative`}>
                   <div className="flex justify-between items-center">
                     <span className={titleClass}>
-                      <RiUserVoiceLine className="text-zinc-400" size={18} /> OS Voice Profile
+                      <RiUserVoiceLine className="text-zinc-400" size={18} /> OS
+                      Voice Profile
                     </span>
                     {isSystemActive && (
                       <span className="text-[10px] text-red-400 font-mono tracking-widest flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded border border-red-500/20">
@@ -443,17 +552,17 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                     )}
                   </div>
                   <div
-                    className={`flex gap-3 h-12 mt-1 ${isSystemActive ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    className={`flex gap-3 h-12 mt-1 ${isSystemActive ? "opacity-40 cursor-not-allowed" : ""}`}
                   >
-                    {(['FEMALE', 'MALE'] as const).map((s) => (
+                    {(["FEMALE", "MALE"] as const).map((s) => (
                       <button
                         key={s}
                         onClick={() => handleVoiceChange(s)}
                         disabled={isSystemActive}
                         className={`cursor-pointer flex-1 flex items-center justify-center text-[12px] font-bold rounded-lg transition-all tracking-widest border ${
                           voice === s
-                            ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.2)]'
-                            : 'bg-[#050505] border-white/10 text-zinc-400 hover:text-white hover:border-white/30'
+                            ? "bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.2)]"
+                            : "bg-(--color-surfaceVariant) border-(--color-border) dark:bg-[#050505] text-zinc-400 hover:text-(--color-text) hover:border-white/30"
                         }`}
                       >
                         {s}
@@ -471,7 +580,7 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
             )}
 
             {/* --- TAB 3: API KEYS --- */}
-            {activeTab === 'keys' && (
+            {activeTab === "keys" && (
               <motion.div
                 key="keys"
                 initial={{ opacity: 0, y: 10 }}
@@ -483,7 +592,8 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                 <div className={`${cardClass} gap-6`}>
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
                     <span className={titleClass}>
-                      <RiKey2Line className="text-zinc-400" size={18} /> External API Endpoints
+                      <RiKey2Line className="text-zinc-400" size={18} />{" "}
+                      External API Endpoints
                     </span>
                     <button
                       onClick={saveApiKeys}
@@ -556,11 +666,16 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                   </div>
 
                   <div className="bg-[#050505] border border-white/5 p-4 rounded-xl mt-2 flex items-start gap-3">
-                    <RiShieldKeyholeLine className="text-zinc-500 shrink-0 mt-0.5" size={16} />
+                    <RiShieldKeyholeLine
+                      className="text-zinc-500 shrink-0 mt-0.5"
+                      size={16}
+                    />
                     <p className="text-[10px] text-zinc-400 font-mono leading-relaxed">
-                      [SECURITY NOTICE]: All API keys are encrypted and stored strictly in your
-                      local OS. IRIS does not transmit these keys to any centralized server. You
-                      maintain full ownership and billing control over your provider endpoints.
+                      [SECURITY NOTICE]: All API keys are encrypted and stored
+                      strictly in your local OS. IRIS does not transmit these
+                      keys to any centralized server. You maintain full
+                      ownership and billing control over your provider
+                      endpoints.
                     </p>
                   </div>
                 </div>
@@ -568,7 +683,7 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
             )}
 
             {/* --- TAB 4: SECURITY --- */}
-            {activeTab === 'security' && (
+            {activeTab === "security" && (
               <motion.div
                 key="security"
                 initial={{ opacity: 0, y: 10 }}
@@ -582,7 +697,7 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                     <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                      exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
                       className="absolute inset-0 z-20 backdrop-blur-2xl bg-black/70 border border-white/10 rounded-3xl flex flex-col items-center justify-center"
                     >
                       <div className="bg-[#111] p-5 rounded-full mb-6 border border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.05)]">
@@ -597,9 +712,11 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                           maxLength={4}
                           pattern="\d*"
                           value={authPin}
-                          onChange={(e) => setAuthPin(e.target.value.replace(/\D/g, ''))}
+                          onChange={(e) =>
+                            setAuthPin(e.target.value.replace(/\D/g, ""))
+                          }
                           placeholder="PIN"
-                          className={`h-full bg-[#050505] border w-32 rounded-lg text-center text-xl tracking-[0.5em] text-white outline-none transition-colors ${authError ? 'border-red-500 text-red-500 bg-red-500/10' : 'border-white/20 focus:border-white focus:bg-[#111]'}`}
+                          className={`h-full bg-[#050505] border w-32 rounded-lg text-center text-xl tracking-[0.5em] text-white outline-none transition-colors ${authError ? "border-red-500 text-red-500 bg-red-500/10" : "border-white/20 focus:border-white focus:bg-[#111]"}`}
                         />
                         <button
                           onClick={unlockSecurityModule}
@@ -615,7 +732,8 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-[#0a0a0c] p-6 rounded-3xl border border-white/5">
                   <div className="bg-[#111113] border border-white/10 p-7 rounded-2xl flex flex-col gap-5">
                     <span className={titleClass}>
-                      <RiLockPasswordLine className="text-zinc-400" size={18} /> Update Master PIN
+                      <RiLockPasswordLine className="text-zinc-400" size={18} />{" "}
+                      Update Master PIN
                     </span>
                     <div className={inputContainerClass}>
                       <input
@@ -623,7 +741,9 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                         maxLength={4}
                         pattern="\d*"
                         value={newPin}
-                        onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+                        onChange={(e) =>
+                          setNewPin(e.target.value.replace(/\D/g, ""))
+                        }
                         placeholder="Enter new 4-digit PIN..."
                         className="bg-transparent border-none outline-none text-sm font-mono text-zinc-100 w-full tracking-[0.3em]"
                       />
@@ -639,7 +759,8 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                   <div className="bg-[#111113] border border-white/10 p-7 rounded-2xl flex flex-col gap-6">
                     <div className="flex justify-between items-center border-b border-white/10 pb-4">
                       <span className={titleClass}>
-                        <RiScan2Line className="text-zinc-400" size={18} /> Biometric Registry
+                        <RiScan2Line className="text-zinc-400" size={18} />{" "}
+                        Biometric Registry
                       </span>
                       <span className="text-[10px] text-white font-mono tracking-widest bg-white/10 px-3 py-1.5 rounded-md font-semibold border border-white/5">
                         {faceCount} ENROLLED
@@ -659,14 +780,16 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
                           <span className="text-[11px] text-white font-mono tracking-widest animate-pulse font-bold">
                             {enrollStatus}
                           </span>
-                          <span className="text-xs text-zinc-400">Keep head steady...</span>
+                          <span className="text-xs text-zinc-400">
+                            Keep head steady...
+                          </span>
                         </div>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-4 h-full justify-between">
                         <p className="text-xs text-zinc-400 leading-relaxed">
-                          Enroll additional structural face descriptors. Data is mathematically
-                          encrypted and stored locally.
+                          Enroll additional structural face descriptors. Data is
+                          mathematically encrypted and stored locally.
                         </p>
                         <button
                           onClick={startFaceEnrollment}
@@ -684,7 +807,7 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
         </div>
       </motion.div>
     </div>
-  )
-}
+  );
+};
 
-export default SettingsView
+export default SettingsView;

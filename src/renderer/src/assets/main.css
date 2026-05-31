@@ -1,9 +1,24 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 html,
 body {
   height: 100%;
   width: 100%;
+  background-color: var(--color-background, #f5f7fa);
+  color: var(--color-text, #1a1c1e);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+
+:root {
+  --color-background: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-surface-variant: #f0f3f8;
+  --color-primary: #00c896;
+  --color-text: #1a1c1e;
+  --color-border: #e2e8f0;
+  --color-input-bg: #f8fafc;
 }
 
 @keyframes scan {

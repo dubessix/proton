@@ -84,10 +84,10 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
-    show: false,
-    fullscreen: true,
-    autoHideMenuBar: true,
-    frame: false,
+    show: true,
+    fullscreen: false,
+    autoHideMenuBar: false,
+    frame: true,
     transparent: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
