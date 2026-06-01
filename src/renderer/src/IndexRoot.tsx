@@ -17,6 +17,7 @@ import ResearchWidget from "./Widgets/DeepResearch";
 import SemanticWidget from "./Widgets/SematicSearch";
 import SmartDropZonesWidget from "./Widgets/SmartZoneWidget";
 import TitleBar from "./components/Titlebar";
+import { useThemeStore } from "./store/theme-store";
 
 export type VisionMode = "camera" | "screen" | "none";
 
@@ -34,6 +35,11 @@ const IndexRoot = () => {
   );
   const activeStreamRef = useRef<MediaStream | null>(null);
   const aiIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Initialize theme on app startup
+  useEffect(() => {
+    useThemeStore.getState().initTheme();
+  }, []);
 
   useEffect(() => {
     window.electron.ipcRenderer.on("overlay-mode", (_e, mode) =>

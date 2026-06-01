@@ -1,11 +1,9 @@
 import React from 'react'
 
-const Sphere = () => {
+export default function Sphere() {
   return (
     <div>
-      spare sphere
+      new add next time
     </div>
   )
 }
-
-export default Sphere

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { FaAndroid } from 'react-icons/fa6'
+import { useState, useEffect, useRef } from "react";
+import { FaAndroid } from "react-icons/fa6";
 import {
   RiLinkM,
   RiWifiLine,
@@ -17,169 +17,197 @@ import {
   RiAddLine,
   RiTerminalLine,
   RiFileCopyLine,
-  RiCheckLine
-} from 'react-icons/ri'
+  RiCheckLine,
+} from "react-icons/ri";
+import { useTheme } from "@renderer/hooks/useTheme";
 
-const PhoneView = ({ glassPanel }: { glassPanel?: string }) => {
-  const [ip, setIp] = useState(() => localStorage.getItem('iris_adb_ip') || '')
-  const [port, setPort] = useState(() => localStorage.getItem('iris_adb_port') || '5555')
-  const [status, setStatus] = useState<'idle' | 'connecting' | 'connected'>('idle')
-  const [uiMode, setUiMode] = useState<'history' | 'manual'>('history')
-  const [errorMsg, setErrorMsg] = useState('')
-  const [deviceHistory, setDeviceHistory] = useState<any[]>([])
-  const [copied, setCopied] = useState(false) 
+const PhoneView = ({ glassPanel: glassPanelProp }: { glassPanel?: string }) => {
+  const { isDark } = useTheme();
+  const glassPanel = isDark
+    ? "bg-zinc-950/40 backdrop-blur-xl border border-white/5 rounded-2xl shadow-xl"
+    : "bg-white/55 backdrop-blur-xl border border-white/80 rounded-2xl shadow-sm";
+  const [ip, setIp] = useState(() => localStorage.getItem("iris_adb_ip") || "");
+  const [port, setPort] = useState(
+    () => localStorage.getItem("iris_adb_port") || "5555",
+  );
+  const [status, setStatus] = useState<"idle" | "connecting" | "connected">(
+    "idle",
+  );
+  const [uiMode, setUiMode] = useState<"history" | "manual">("history");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [deviceHistory, setDeviceHistory] = useState<any[]>([]);
+  const [copied, setCopied] = useState(false);
 
-  const screenRef = useRef<HTMLImageElement>(null)
-  const isStreaming = useRef(false)
-  const knownNotifs = useRef<string[]>([])
-  const hasAutoConnected = useRef(false)
+  const screenRef = useRef<HTMLImageElement>(null);
+  const isStreaming = useRef(false);
+  const knownNotifs = useRef<string[]>([]);
+  const hasAutoConnected = useRef(false);
 
   const [telemetry, setTelemetry] = useState({
-    model: 'UNKNOWN DEVICE',
-    os: 'ANDROID --',
-    battery: { level: 0, isCharging: false, temp: '0.0' },
-    storage: { used: '0 GB', total: '0 GB TOTAL', percent: 0 }
-  })
+    model: "UNKNOWN DEVICE",
+    os: "ANDROID --",
+    battery: { level: 0, isCharging: false, temp: "0.0" },
+    storage: { used: "0 GB", total: "0 GB TOTAL", percent: 0 },
+  });
 
   useEffect(() => {
-    window.electron.ipcRenderer.invoke('adb-get-history').then((data) => {
-      setDeviceHistory(data)
+    window.electron.ipcRenderer.invoke("adb-get-history").then((data) => {
+      setDeviceHistory(data);
 
       if (data.length > 0 && !hasAutoConnected.current) {
-        hasAutoConnected.current = true
+        hasAutoConnected.current = true;
 
-        const lastDevice = data[data.length - 1]
+        const lastDevice = data[data.length - 1];
 
         if (lastDevice && lastDevice.ip) {
-          setIp(lastDevice.ip)
-          setPort(lastDevice.port)
-          connectToDevice(lastDevice.ip, lastDevice.port)
+          setIp(lastDevice.ip);
+          setPort(lastDevice.port);
+          connectToDevice(lastDevice.ip, lastDevice.port);
         }
       }
-    })
-  }, [])
+    });
+  }, []);
 
   const checkNotifications = async () => {
     try {
-      const res = await window.electron.ipcRenderer.invoke('adb-get-notifications')
+      const res = await window.electron.ipcRenderer.invoke(
+        "adb-get-notifications",
+      );
       if (res.success && res.data) {
-        const currentNotifs: string[] = res.data
+        const currentNotifs: string[] = res.data;
 
         if (knownNotifs.current.length === 0) {
-          knownNotifs.current = currentNotifs
-          return
+          knownNotifs.current = currentNotifs;
+          return;
         }
 
-        const newNotifs = currentNotifs.filter((n) => !knownNotifs.current.includes(n))
+        const newNotifs = currentNotifs.filter(
+          (n) => !knownNotifs.current.includes(n),
+        );
 
         if (newNotifs.length > 0) {
           window.dispatchEvent(
-            new CustomEvent('ai-force-speak', {
-              detail: `System Alert: The user just received a new mobile notification. Announce it out loud briefly: "${newNotifs[0]}"`
-            })
-          )
-          knownNotifs.current = currentNotifs
+            new CustomEvent("ai-force-speak", {
+              detail: `System Alert: The user just received a new mobile notification. Announce it out loud briefly: "${newNotifs[0]}"`,
+            }),
+          );
+          knownNotifs.current = currentNotifs;
         }
       }
     } catch (e) {}
-  }
+  };
 
   const connectToDevice = async (targetIp: string, targetPort: string) => {
-    if (!targetIp || !targetPort) return setErrorMsg('IP and Port are required.')
-    setStatus('connecting')
-    setErrorMsg('')
+    if (!targetIp || !targetPort)
+      return setErrorMsg("IP and Port are required.");
+    setStatus("connecting");
+    setErrorMsg("");
 
     try {
-      const res = await window.electron.ipcRenderer.invoke('adb-connect', {
+      const res = await window.electron.ipcRenderer.invoke("adb-connect", {
         ip: targetIp,
-        port: targetPort
-      })
+        port: targetPort,
+      });
       if (res.success) {
-        setStatus('connected')
-        isStreaming.current = true
-        fetchTelemetry()
-        startScreenStream()
+        setStatus("connected");
+        isStreaming.current = true;
+        fetchTelemetry();
+        startScreenStream();
       } else {
-        setStatus('idle')
-        setErrorMsg('Connection refused. Ensure TCP/IP daemon is running (adb tcpip 5555).')
+        setStatus("idle");
+        setErrorMsg(
+          "Connection refused. Ensure TCP/IP daemon is running (adb tcpip 5555).",
+        );
       }
     } catch (e) {
-      setStatus('idle')
-      setErrorMsg('Electron IPC Error.')
+      setStatus("idle");
+      setErrorMsg("Electron IPC Error.");
     }
-  }
+  };
 
   const handleManualConnect = () => {
-    localStorage.setItem('iris_adb_ip', ip)
-    localStorage.setItem('iris_adb_port', port)
-    connectToDevice(ip, port)
-  }
+    localStorage.setItem("iris_adb_ip", ip);
+    localStorage.setItem("iris_adb_port", port);
+    connectToDevice(ip, port);
+  };
 
   const handleDisconnect = async () => {
-    isStreaming.current = false
+    isStreaming.current = false;
     try {
-      await window.electron.ipcRenderer.invoke('adb-disconnect')
+      await window.electron.ipcRenderer.invoke("adb-disconnect");
     } catch (e) {}
-    setStatus('idle')
-    if (screenRef.current) screenRef.current.src = ''
-  }
+    setStatus("idle");
+    if (screenRef.current) screenRef.current.src = "";
+  };
 
-  const executeQuickCommand = async (action: 'camera' | 'wake' | 'lock' | 'home') => {
+  const executeQuickCommand = async (
+    action: "camera" | "wake" | "lock" | "home",
+  ) => {
     try {
-      await window.electron.ipcRenderer.invoke('adb-quick-action', { action })
+      await window.electron.ipcRenderer.invoke("adb-quick-action", { action });
     } catch (e) {}
-  }
+  };
 
   const fetchTelemetry = async () => {
     try {
-      const res = await window.electron.ipcRenderer.invoke('adb-telemetry')
-      if (res.success) setTelemetry(res.data)
+      const res = await window.electron.ipcRenderer.invoke("adb-telemetry");
+      if (res.success) setTelemetry(res.data);
     } catch (e) {}
-  }
+  };
 
   const startScreenStream = async () => {
-    if (!isStreaming.current) return
+    if (!isStreaming.current) return;
     try {
-      const res = await window.electron.ipcRenderer.invoke('adb-screenshot')
+      const res = await window.electron.ipcRenderer.invoke("adb-screenshot");
       if (res.success && res.image && screenRef.current) {
-        screenRef.current.src = res.image
+        screenRef.current.src = res.image;
       }
     } catch (e) {}
 
     if (isStreaming.current) {
-      requestAnimationFrame(startScreenStream)
+      requestAnimationFrame(startScreenStream);
     }
-  }
+  };
 
   const handleCopyCommand = () => {
-    navigator.clipboard.writeText('adb tcpip 5555')
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+    navigator.clipboard.writeText("adb tcpip 5555");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   useEffect(() => {
-    let interval: any
-    if (status === 'connected') {
+    let interval: any;
+    if (status === "connected") {
       interval = setInterval(() => {
-        fetchTelemetry()
-        checkNotifications()
-      }, 3000)
+        fetchTelemetry();
+        checkNotifications();
+      }, 3000);
     }
-    return () => clearInterval(interval)
-  }, [status])
+    return () => clearInterval(interval);
+  }, [status]);
 
-  if (status !== 'connected' && uiMode === 'history') {
+  if (status !== "connected" && uiMode === "history") {
     return (
-      <div className="flex-1 flex flex-col items-center justify-start pt-16 p-10 animate-in fade-in duration-300 bg-[#050505] min-h-screen text-emerald-50 relative overflow-y-auto scrollbar-small pb-24">
+      <div className={`flex-1 flex flex-col items-center justify-start pt-16 p-10 animate-in fade-in duration-300 min-h-screen relative overflow-y-auto scrollbar-small pb-24 ${
+        isDark ? 'bg-[#050505] text-emerald-50' : 'bg-[#EEF2EF] text-[#1A1F1A]'
+      }`}>
         <div className="w-full max-w-6xl flex flex-col items-center">
           <div className="flex flex-col items-center text-center mb-16">
-            <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/30 mb-6 inline-block">
-              <RiHistoryLine className="text-emerald-400" size={32} />
+            <div className={`p-4 rounded-2xl border mb-6 inline-block ${
+              isDark 
+                ? 'bg-emerald-500/10 border-emerald-500/30' 
+                : 'bg-emerald-100 border-emerald-300'
+            }`}>
+              <RiHistoryLine className="text-emerald-500" size={32} />
             </div>
-            <h1 className="text-4xl font-black text-white tracking-[0.2em] uppercase">
+            <h1 className={`text-4xl font-black tracking-[0.2em] uppercase ${
+              isDark ? 'text-white' : 'text-[#1A1F1A]'
+            }`}>
               NEURAL ARCHIVE
             </h1>
-            <p className="text-xs text-emerald-500 font-mono tracking-widest mt-2">
+            <p className={`text-xs font-mono tracking-widest mt-2 ${
+              isDark ? 'text-emerald-500' : 'text-emerald-600'
+            }`}>
               SELECT A TARGET DEVICE FOR UPLINK
             </p>
           </div>
@@ -189,64 +217,130 @@ const PhoneView = ({ glassPanel }: { glassPanel?: string }) => {
               <button
                 key={i}
                 onClick={() => connectToDevice(dev.ip, dev.port)}
-                className="w-55 h-110 bg-black border-8 border-zinc-900 rounded-[3rem] relative flex flex-col p-2 group hover:border-emerald-500/50 transition-all duration-500 shadow-2xl hover:shadow-[0_0_40px_rgba(16,185,129,0.2)]"
+                className={`w-55 h-110 rounded-[3rem] relative flex flex-col p-2 group transition-all duration-500 border-8 shadow-2xl hover:shadow-[0_0_40px_rgba(16,185,129,0.2)] ${
+                  isDark
+                    ? 'bg-black border-zinc-900 hover:border-emerald-500/50'
+                    : 'bg-white/40 border-white/60 hover:border-emerald-400'
+                }`}
               >
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-20 h-5 bg-zinc-900 rounded-full z-20 group-hover:bg-emerald-900/50 transition-colors"></div>
-                <div className="flex-1 bg-linear-to-b from-zinc-900 to-black rounded-[2.2rem] overflow-hidden flex flex-col items-center justify-center p-6 relative">
-                  <div className="absolute inset-0 bg-emerald-500/0 group-hover:bg-emerald-500/10 transition-colors duration-500"></div>
+                <div className={`absolute top-3 left-1/2 -translate-x-1/2 w-20 h-5 rounded-full z-20 transition-colors ${
+                  isDark
+                    ? 'bg-zinc-900 group-hover:bg-emerald-900/50'
+                    : 'bg-white/30 group-hover:bg-emerald-200'
+                }`}></div>
+                <div className={`flex-1 rounded-[2.2rem] overflow-hidden flex flex-col items-center justify-center p-6 relative ${
+                  isDark
+                    ? 'bg-linear-to-b from-zinc-900 to-black'
+                    : 'bg-linear-to-b from-white/50 to-white/30'
+                }`}>
+                  <div className={`absolute inset-0 group-hover:transition-colors duration-500 ${
+                    isDark
+                      ? 'bg-emerald-500/0 group-hover:bg-emerald-500/10'
+                      : 'bg-emerald-100/0 group-hover:bg-emerald-100/20'
+                  }`}></div>
                   <RiSmartphoneLine
                     size={64}
-                    className="text-zinc-700 group-hover:text-emerald-400 mb-6 transition-colors duration-500 drop-shadow-[0_0_15px_rgba(16,185,129,0)] group-hover:drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+                    className={`mb-6 transition-colors duration-500 drop-shadow-[0_0_15px_rgba(16,185,129,0)] group-hover:drop-shadow-[0_0_15px_rgba(16,185,129,0.5)] ${
+                      isDark
+                        ? 'text-zinc-700 group-hover:text-emerald-400'
+                        : 'text-[#5A6B5A] group-hover:text-emerald-600'
+                    }`}
                   />
-                  <h3 className="text-lg font-black text-white mb-2 tracking-widest text-center uppercase z-10">
+                  <h3 className={`text-lg font-black mb-2 tracking-widest text-center uppercase z-10 ${
+                    isDark ? 'text-white' : 'text-[#1A1F1A]'
+                  }`}>
                     {dev.model}
                   </h3>
-                  <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 group-hover:text-emerald-300 z-10">
+                  <div className={`flex items-center gap-2 text-[10px] font-mono z-10 ${
+                    isDark
+                      ? 'text-zinc-500 group-hover:text-emerald-300'
+                      : 'text-[#5A6B5A] group-hover:text-emerald-600'
+                  }`}>
                     <RiWifiLine /> {dev.ip}:{dev.port}
                   </div>
-                  <div className="mt-8 px-6 py-2 border border-zinc-700 group-hover:border-emerald-500 bg-transparent group-hover:bg-emerald-500 text-zinc-500 group-hover:text-black font-bold text-[10px] tracking-widest rounded-full transition-all z-10">
-                    {status === 'connecting' && ip === dev.ip ? 'LINKING...' : 'UPLINK'}
+                  <div className={`mt-8 px-6 py-2 border bg-transparent font-bold text-[10px] tracking-widest rounded-full transition-all z-10 ${
+                    isDark
+                      ? 'border-zinc-700 group-hover:border-emerald-500 group-hover:bg-emerald-500 text-zinc-500 group-hover:text-black'
+                      : 'border-black/20 group-hover:border-emerald-500 group-hover:bg-emerald-400 text-[#5A6B5A] group-hover:text-white'
+                  }`}>
+                    {status === "connecting" && ip === dev.ip
+                      ? "LINKING..."
+                      : "UPLINK"}
                   </div>
                 </div>
               </button>
             ))}
 
             <button
-              onClick={() => setUiMode('manual')}
-              className="w-55 h-110 bg-transparent border-4 border-dashed border-zinc-800 hover:border-emerald-500/50 rounded-[3rem] flex flex-col items-center justify-center group transition-all duration-500 hover:bg-emerald-500/5"
+              onClick={() => setUiMode("manual")}
+              className={`w-55 h-110 border-4 border-dashed rounded-[3rem] flex flex-col items-center justify-center group transition-all duration-500 ${
+                isDark
+                  ? 'bg-transparent border-zinc-800 hover:border-emerald-500/50 hover:bg-emerald-500/5'
+                  : 'bg-white/20 border-black/10 hover:border-emerald-400 hover:bg-emerald-100/10'
+              }`}
             >
-              <div className="w-16 h-16 rounded-full bg-zinc-900 group-hover:bg-emerald-500 flex items-center justify-center text-zinc-500 group-hover:text-black transition-all mb-4">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all mb-4 ${
+                isDark
+                  ? 'bg-zinc-900 group-hover:bg-emerald-500 text-zinc-500 group-hover:text-black'
+                  : 'bg-white/40 group-hover:bg-emerald-400 text-[#5A6B5A] group-hover:text-white'
+              }`}>
                 <RiAddLine size={32} />
               </div>
-              <span className="text-xs font-bold text-zinc-500 group-hover:text-emerald-400 tracking-widest uppercase">
+              <span className={`text-xs font-bold tracking-widest uppercase ${
+                isDark
+                  ? 'text-zinc-500 group-hover:text-emerald-400'
+                  : 'text-[#5A6B5A] group-hover:text-emerald-600'
+              }`}>
                 NEW DEVICE
               </span>
             </button>
           </div>
         </div>
       </div>
-    )
+    );
   }
 
-  if (status !== 'connected' && uiMode === 'manual') {
+  if (status !== "connected" && uiMode === "manual") {
     return (
-      <div className="flex-1 flex flex-col lg:flex-row items-start justify-center gap-8 p-6 md:p-12 animate-in fade-in duration-300 bg-[#050505] min-h-dvh overflow-y-auto text-emerald-50 pb-24">
+      <div className={`flex-1 flex flex-col lg:flex-row items-start justify-center gap-8 p-6 md:p-12 animate-in fade-in duration-300 min-h-dvh overflow-y-auto pb-24 ${
+        isDark ? 'bg-[#050505] text-emerald-50' : 'bg-[#EEF2EF] text-[#1A1F1A]'
+      }`}>
         <div className="w-full lg:w-1/3 max-w-md flex flex-col gap-6 shrink-0">
-          <div className="p-6 bg-black border border-emerald-900/40 rounded-2xl shadow-lg flex items-center justify-between">
+          <div className={`p-6 rounded-2xl shadow-lg flex items-center justify-between border ${
+            isDark
+              ? 'bg-black border-emerald-900/40'
+              : 'bg-white/55 border-white/80'
+          }`}>
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-emerald-950/40 rounded-xl border border-emerald-400/30">
-                <FaAndroid className="text-emerald-400 text-2xl" />
+              <div className={`p-3 rounded-xl border ${
+                isDark
+                  ? 'bg-emerald-950/40 border-emerald-400/30'
+                  : 'bg-emerald-100 border-emerald-300'
+              }`}>
+                <FaAndroid className="text-emerald-500 text-2xl" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white tracking-wide">Device Uplink</h2>
-                <p className="text-[10px] text-emerald-400/70 font-mono">TCP/IP CONFIGURATION</p>
+                <h2 className={`text-lg font-bold tracking-wide ${
+                  isDark ? 'text-white' : 'text-[#1A1F1A]'
+                }`}>
+                  Device Uplink
+                </h2>
+                <p className={`text-[10px] font-mono ${
+                  isDark ? 'text-emerald-400/70' : 'text-emerald-600'
+                }`}>
+                  TCP/IP CONFIGURATION
+                </p>
               </div>
             </div>
 
             {deviceHistory.length > 0 && (
               <button
-                onClick={() => setUiMode('history')}
-                className="text-[10px] font-bold tracking-widest text-emerald-500 hover:text-emerald-300 hover:bg-emerald-500/10 uppercase px-3 py-1.5 border border-emerald-500/30 rounded-lg transition-all shrink-0 ml-2"
+                onClick={() => setUiMode("history")}
+                className={`text-[10px] font-bold tracking-widest uppercase px-3 py-1.5 border rounded-lg transition-all shrink-0 ml-2 ${
+                  isDark
+                    ? 'text-emerald-500 hover:text-emerald-300 hover:bg-emerald-500/10 border-emerald-500/30'
+                    : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100 border-emerald-300'
+                }`}
               >
                 ARCHIVE
               </button>
@@ -254,140 +348,225 @@ const PhoneView = ({ glassPanel }: { glassPanel?: string }) => {
           </div>
 
           <div
-            className={`${glassPanel || 'bg-zinc-950'} p-8 border border-emerald-900/40 rounded-2xl shadow-lg flex flex-col gap-6`}
+            className={`p-8 rounded-2xl shadow-lg flex flex-col gap-6 border ${
+              isDark
+                ? 'bg-black border-emerald-900/40'
+                : 'bg-white/55 border-white/80'
+            }`}
           >
             {errorMsg && (
-              <div className="p-4 bg-red-500/10 border border-red-500/30 text-red-400 text-xs rounded-lg font-mono leading-relaxed">
+              <div className={`p-4 border rounded-lg font-mono leading-relaxed text-xs ${
+                isDark
+                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                  : 'bg-red-100 border-red-300 text-red-700'
+              }`}>
                 {errorMsg}
               </div>
             )}
 
             <div>
-              <label className="text-xs font-bold text-emerald-400/80 tracking-wide mb-3 block">
+              <label className={`text-xs font-bold tracking-wide mb-3 block ${
+                isDark ? 'text-emerald-400/80' : 'text-emerald-600'
+              }`}>
                 Target IP Address
               </label>
-              <div className="flex items-center bg-black border border-emerald-900/50 rounded-xl px-5 py-4 focus-within:border-emerald-400 transition-all">
-                <RiWifiLine className="text-emerald-400 mr-3" size={20} />
+              <div className={`flex items-center rounded-xl px-5 py-4 transition-all border focus-within:border-emerald-400 ${
+                isDark
+                  ? 'bg-black border-emerald-900/50'
+                  : 'bg-white/40 border-black/10'
+              }`}>
+                <RiWifiLine className="text-emerald-500 mr-3" size={20} />
                 <input
                   type="text"
                   value={ip}
                   onChange={(e) => setIp(e.target.value)}
                   placeholder="192.168.1.xxx"
-                  className="bg-transparent border-none outline-none text-base text-emerald-400 w-full font-mono placeholder:text-emerald-900/50"
+                  className={`bg-transparent border-none outline-none text-base w-full font-mono ${
+                    isDark
+                      ? 'text-emerald-400 placeholder:text-emerald-900/50'
+                      : 'text-emerald-600 placeholder:text-[#8FA08F]'
+                  }`}
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-bold text-emerald-400/80 tracking-wide mb-3 block">
+              <label className={`text-xs font-bold tracking-wide mb-3 block ${
+                isDark ? 'text-emerald-400/80' : 'text-emerald-600'
+              }`}>
                 Target Port
               </label>
-              <div className="flex items-center bg-black border border-emerald-900/50 rounded-xl px-5 py-4 focus-within:border-emerald-400 transition-all">
-                <RiLinkM className="text-emerald-400 mr-3" size={20} />
+              <div className={`flex items-center rounded-xl px-5 py-4 transition-all border focus-within:border-emerald-400 ${
+                isDark
+                  ? 'bg-black border-emerald-900/50'
+                  : 'bg-white/40 border-black/10'
+              }`}>
+                <RiLinkM className="text-emerald-500 mr-3" size={20} />
                 <input
                   type="text"
                   value={port}
                   onChange={(e) => setPort(e.target.value)}
                   placeholder="5555"
-                  className="bg-transparent border-none outline-none text-base text-emerald-400 w-full font-mono placeholder:text-emerald-900/50"
+                  className={`bg-transparent border-none outline-none text-base w-full font-mono ${
+                    isDark
+                      ? 'text-emerald-400 placeholder:text-emerald-900/50'
+                      : 'text-emerald-600 placeholder:text-[#8FA08F]'
+                  }`}
                 />
               </div>
             </div>
 
             <button
               onClick={handleManualConnect}
-              disabled={status === 'connecting'}
-              className="w-full mt-4 py-5 bg-emerald-950 border border-emerald-400/50 hover:bg-emerald-400 text-emerald-400 hover:text-black font-bold rounded-xl tracking-widest transition-all duration-300 uppercase text-sm"
+              disabled={status === "connecting"}
+              className={`w-full mt-4 py-5 font-bold rounded-xl tracking-widest transition-all duration-300 uppercase text-sm border ${
+                isDark
+                  ? 'bg-emerald-950 border-emerald-400/50 hover:bg-emerald-400 text-emerald-400 hover:text-black'
+                  : 'bg-emerald-100 border-emerald-400 hover:bg-emerald-400 text-emerald-600 hover:text-white'
+              }`}
             >
-              {status === 'connecting' ? 'INITIALIZING LINK...' : 'ESTABLISH CONNECTION'}
+              {status === "connecting"
+                ? "INITIALIZING LINK..."
+                : "ESTABLISH CONNECTION"}
             </button>
           </div>
         </div>
 
         <div className="w-full lg:w-1/2 max-w-2xl flex flex-col">
-          <div className="bg-black border border-emerald-900/40 rounded-2xl shadow-lg p-8 md:p-10 flex flex-col relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+          <div className={`rounded-2xl shadow-lg p-8 md:p-10 flex flex-col relative overflow-hidden border ${
+            isDark
+              ? 'bg-black border-emerald-900/40'
+              : 'bg-white/55 border-white/80'
+          }`}>
+            <div className={`absolute top-0 right-0 p-8 pointer-events-none ${
+              isDark ? 'opacity-5' : 'opacity-10'
+            }`}>
               <RiTerminalLine size={240} />
             </div>
 
             <div className="flex items-center gap-4 mb-8 relative z-10">
               <RiTerminalBoxLine className="text-emerald-500" size={28} />
-              <h3 className="text-base font-bold tracking-[0.2em] text-emerald-400 uppercase">
+              <h3 className={`text-base font-bold tracking-[0.2em] uppercase ${
+                isDark ? 'text-emerald-400' : 'text-emerald-600'
+              }`}>
                 First-Time Setup Protocol
               </h3>
             </div>
 
-            <p className="text-sm text-zinc-400 font-mono mb-10 leading-relaxed relative z-10 pr-4">
-              Wireless ADB requires the device's TCP/IP daemon to be initialized via USB first.
-              Follow these steps to prepare your device for remote uplink.
+            <p className={`text-sm font-mono mb-10 leading-relaxed relative z-10 pr-4 ${
+              isDark ? 'text-zinc-400' : 'text-[#5A6B5A]'
+            }`}>
+              Wireless ADB requires the device's TCP/IP daemon to be initialized
+              via USB first. Follow these steps to prepare your device for
+              remote uplink.
             </p>
 
             <div className="space-y-8 relative z-10">
               <div className="flex gap-5">
                 <div className="flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-full bg-emerald-950 border border-emerald-500/50 flex items-center justify-center text-xs font-bold text-emerald-400 shrink-0">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border ${
+                    isDark
+                      ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400'
+                      : 'bg-emerald-100 border-emerald-400 text-emerald-600'
+                  }`}>
                     1
                   </div>
-                  <div className="w-px h-full bg-emerald-900/30 my-2"></div>
+                  <div className={`w-px h-full my-2 ${
+                    isDark ? 'bg-emerald-900/30' : 'bg-emerald-200'
+                  }`}></div>
                 </div>
                 <div className="pb-3">
-                  <h4 className="text-sm font-bold text-white tracking-wider mb-2">
+                  <h4 className={`text-sm font-bold tracking-wider mb-2 ${
+                    isDark ? 'text-white' : 'text-[#1A1F1A]'
+                  }`}>
                     ENABLE USB DEBUGGING
                   </h4>
-                  <p className="text-xs font-mono text-zinc-500 leading-relaxed">
-                    Go to{' '}
-                    <span className="text-emerald-400/70">Settings &gt; Developer Options</span> on
-                    your Android and enable USB Debugging. (If hidden, tap "Build Number" 7 times in
-                    About Phone).
+                  <p className={`text-xs font-mono leading-relaxed ${
+                    isDark ? 'text-zinc-500' : 'text-[#5A6B5A]'
+                  }`}>
+                    Go to{" "}
+                    <span className={isDark ? 'text-emerald-400/70' : 'text-emerald-600'}>
+                      Settings &gt; Developer Options
+                    </span>{" "}
+                    on your Android and enable USB Debugging. (If hidden, tap
+                    "Build Number" 7 times in About Phone).
                   </p>
                 </div>
               </div>
 
               <div className="flex gap-5">
                 <div className="flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-full bg-emerald-950 border border-emerald-500/50 flex items-center justify-center text-xs font-bold text-emerald-400 shrink-0">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border ${
+                    isDark
+                      ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400'
+                      : 'bg-emerald-100 border-emerald-400 text-emerald-600'
+                  }`}>
                     2
                   </div>
-                  <div className="w-px h-full bg-emerald-900/30 my-2"></div>
+                  <div className={`w-px h-full my-2 ${
+                    isDark ? 'bg-emerald-900/30' : 'bg-emerald-200'
+                  }`}></div>
                 </div>
                 <div className="pb-3">
-                  <h4 className="text-sm font-bold text-white tracking-wider mb-2">
+                  <h4 className={`text-sm font-bold tracking-wider mb-2 ${
+                    isDark ? 'text-white' : 'text-[#1A1F1A]'
+                  }`}>
                     PHYSICAL LINK
                   </h4>
-                  <p className="text-xs font-mono text-zinc-500 leading-relaxed">
-                    Connect the device to this PC via USB cable. Accept the "Allow USB debugging"
-                    prompt on your phone's screen.
+                  <p className={`text-xs font-mono leading-relaxed ${
+                    isDark ? 'text-zinc-500' : 'text-[#5A6B5A]'
+                  }`}>
+                    Connect the device to this PC via USB cable. Accept the
+                    "Allow USB debugging" prompt on your phone's screen.
                   </p>
                 </div>
               </div>
 
               <div className="flex gap-5">
                 <div className="flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-full bg-emerald-950 border border-emerald-500/50 flex items-center justify-center text-xs font-bold text-emerald-400 shrink-0">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border ${
+                    isDark
+                      ? 'bg-emerald-950 border-emerald-500/50 text-emerald-400'
+                      : 'bg-emerald-100 border-emerald-400 text-emerald-600'
+                  }`}>
                     3
                   </div>
-                  <div className="w-px h-full bg-emerald-900/30 my-2"></div>
+                  <div className={`w-px h-full my-2 ${
+                    isDark ? 'bg-emerald-900/30' : 'bg-emerald-200'
+                  }`}></div>
                 </div>
                 <div className="pb-3 w-full">
-                  <h4 className="text-sm font-bold text-white tracking-wider mb-2">
+                  <h4 className={`text-sm font-bold tracking-wider mb-2 ${
+                    isDark ? 'text-white' : 'text-[#1A1F1A]'
+                  }`}>
                     START THE DAEMON
                   </h4>
-                  <p className="text-xs font-mono text-zinc-500 leading-relaxed mb-3">
-                    Open your PC's Command Prompt / Terminal and execute the following command to
-                    open the port:
+                  <p className={`text-xs font-mono leading-relaxed mb-3 ${
+                    isDark ? 'text-zinc-500' : 'text-[#5A6B5A]'
+                  }`}>
+                    Open your PC's Command Prompt / Terminal and execute the
+                    following command to open the port:
                   </p>
 
                   <div className="relative group w-full">
-                    <code className="block w-full bg-zinc-950 border border-emerald-900/30 text-emerald-400 text-sm p-4 pr-14 rounded-xl tracking-widest font-mono">
+                    <code className={`block w-full text-sm p-4 pr-14 rounded-xl tracking-widest font-mono border ${
+                      isDark
+                        ? 'bg-zinc-950 border-emerald-900/30 text-emerald-400'
+                        : 'bg-white/40 border-black/10 text-emerald-600'
+                    }`}>
                       adb tcpip 5555
                     </code>
                     <button
                       onClick={handleCopyCommand}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-emerald-600 hover:text-emerald-400 hover:bg-emerald-900/30 rounded-lg transition-all"
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-all ${
+                        isDark
+                          ? 'text-emerald-600 hover:text-emerald-400 hover:bg-emerald-900/30'
+                          : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100'
+                      }`}
                       title="Copy command"
                     >
                       {copied ? (
-                        <RiCheckLine size={20} className="text-emerald-400" />
+                        <RiCheckLine size={20} className={isDark ? 'text-emerald-400' : 'text-emerald-600'} />
                       ) : (
                         <RiFileCopyLine size={20} />
                       )}
@@ -398,17 +577,26 @@ const PhoneView = ({ glassPanel }: { glassPanel?: string }) => {
 
               <div className="flex gap-5">
                 <div className="flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)] flex items-center justify-center text-xs font-bold text-black shrink-0">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                    isDark
+                      ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)] text-black'
+                      : 'bg-emerald-400 shadow-[0_0_15px_rgba(46,204,143,0.3)] text-white'
+                  }`}>
                     4
                   </div>
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white tracking-wider mb-2">
+                  <h4 className={`text-sm font-bold tracking-wider mb-2 ${
+                    isDark ? 'text-white' : 'text-[#1A1F1A]'
+                  }`}>
                     SEVER CABLE & CONNECT
                   </h4>
-                  <p className="text-xs font-mono text-zinc-500 leading-relaxed">
-                    Disconnect the USB cable. Find your phone's Wi-Fi IP address, enter it in the
-                    form to the left, and establish the connection.
+                  <p className={`text-xs font-mono leading-relaxed ${
+                    isDark ? 'text-zinc-500' : 'text-[#5A6B5A]'
+                  }`}>
+                    Disconnect the USB cable. Find your phone's Wi-Fi IP
+                    address, enter it in the form to the left, and establish the
+                    connection.
                   </p>
                 </div>
               </div>
@@ -416,57 +604,97 @@ const PhoneView = ({ glassPanel }: { glassPanel?: string }) => {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-10 p-10 animate-in fade-in duration-500 bg-[#0a0a0a] min-h-screen overflow-y-auto">
+    <div className={`flex-1 flex flex-col lg:flex-row items-center justify-center gap-10 p-10 animate-in fade-in duration-500 min-h-screen overflow-y-auto ${
+      isDark ? 'bg-[#0a0a0a]' : 'bg-[#EEF2EF]'
+    }`}>
       <div className="w-1/4 flex flex-col">
         <div className="flex items-center gap-4 mb-6">
-          <div className="p-3 bg-purple-500/10 rounded-xl border border-purple-500/30">
-            <RiSmartphoneLine className="text-purple-400" size={24} />
+          <div className={`p-3 rounded-xl border ${
+            isDark
+              ? 'bg-purple-500/10 border-purple-500/30'
+              : 'bg-purple-100 border-purple-300'
+          }`}>
+            <RiSmartphoneLine className={isDark ? 'text-purple-400' : 'text-purple-600'} size={24} />
           </div>
           <div>
-            <h2 className="text-lg font-black text-white tracking-widest uppercase">
+            <h2 className={`text-lg font-black tracking-widest uppercase ${
+              isDark ? 'text-white' : 'text-[#1A1F1A]'
+            }`}>
               {telemetry.model}
             </h2>
-            <p className="text-[10px] text-zinc-500 font-mono tracking-widest uppercase">
+            <p className={`text-[10px] font-mono tracking-widest uppercase ${
+              isDark ? 'text-zinc-500' : 'text-[#5A6B5A]'
+            }`}>
               {telemetry.os}
             </p>
           </div>
         </div>
 
-        <div className="flex justify-between text-[10px] font-mono text-cyan-500 border-b border-white/5 pb-4 mb-4">
+        <div className={`flex justify-between text-[10px] font-mono border-b pb-4 mb-4 ${
+          isDark
+            ? 'text-cyan-500 border-white/5'
+            : 'text-cyan-600 border-black/10'
+        }`}>
           <span>UPTIME: LIVE</span>
-          <span className="text-orange-500">TEMP: {telemetry.battery.temp}°C</span>
+          <span className="text-orange-500">
+            TEMP: {telemetry.battery.temp}°C
+          </span>
         </div>
 
-        <h3 className="text-fuchsia-500 font-bold tracking-widest text-sm text-center my-6 drop-shadow-[0_0_10px_rgba(217,70,239,0.5)]">
+        <h3 className={`font-bold tracking-widest text-sm text-center my-6 drop-shadow-[0_0_10px_rgba(217,70,239,0.5)] ${
+          isDark ? 'text-fuchsia-500' : 'text-fuchsia-600'
+        }`}>
           DEVICE TELEMETRY
         </h3>
 
         <div className="flex flex-col gap-4">
-          <div className="bg-[#111] border border-white/5 rounded-2xl p-5 hover:border-purple-500/30 transition-all">
+          <div className={`rounded-2xl p-5 transition-all border ${
+            isDark
+              ? 'bg-[#111] border-white/5 hover:border-purple-500/30'
+              : 'bg-white/40 border-black/10 hover:border-purple-400'
+          }`}>
             <div className="flex justify-between items-center mb-3">
-              <span className="text-[10px] font-bold text-zinc-500 tracking-widest">NETWORK</span>
+              <span className={`text-[10px] font-bold tracking-widest ${
+                isDark ? 'text-zinc-500' : 'text-[#5A6B5A]'
+              }`}>
+                NETWORK
+              </span>
               <RiSignalWifi3Line className="text-purple-500" />
             </div>
-            <h4 className="text-2xl font-black text-white">ACTIVE</h4>
-            <span className="text-[10px] font-mono text-zinc-500">TCP/IP BRIDGE</span>
+            <h4 className={`text-2xl font-black ${isDark ? 'text-white' : 'text-[#1A1F1A]'}`}>ACTIVE</h4>
+            <span className={`text-[10px] font-mono ${isDark ? 'text-zinc-500' : 'text-[#5A6B5A]'}`}>
+              TCP/IP BRIDGE
+            </span>
           </div>
 
-          <div className="bg-[#111] border border-white/5 rounded-2xl p-5 hover:border-purple-500/30 transition-all">
+          <div className={`rounded-2xl p-5 transition-all border ${
+            isDark
+              ? 'bg-[#111] border-white/5 hover:border-purple-500/30'
+              : 'bg-white/40 border-black/10 hover:border-purple-400'
+          }`}>
             <div className="flex justify-between items-center mb-3">
-              <span className="text-[10px] font-bold text-zinc-500 tracking-widest">BATTERY</span>
+              <span className={`text-[10px] font-bold tracking-widest ${
+                isDark ? 'text-zinc-500' : 'text-[#5A6B5A]'
+              }`}>
+                BATTERY
+              </span>
               <RiBattery2ChargeLine className="text-green-500" />
             </div>
             <div className="flex justify-between items-end mb-2">
-              <h4 className="text-3xl font-black text-white">{telemetry.battery.level}%</h4>
-              <span className="text-[10px] font-mono text-green-500">
-                {telemetry.battery.isCharging ? 'CHARGING' : 'DISCHARGING'}
+              <h4 className={`text-3xl font-black ${isDark ? 'text-white' : 'text-[#1A1F1A]'}`}>
+                {telemetry.battery.level}%
+              </h4>
+              <span className={`text-[10px] font-mono ${isDark ? 'text-green-500' : 'text-green-600'}`}>
+                {telemetry.battery.isCharging ? "CHARGING" : "DISCHARGING"}
               </span>
             </div>
-            <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+            <div className={`w-full rounded-full h-1.5 overflow-hidden ${
+              isDark ? 'bg-zinc-800' : 'bg-white/50'
+            }`}>
               <div
                 className="bg-green-500 h-1.5 shadow-[0_0_10px_rgba(34,197,94,0.8)]"
                 style={{ width: `${telemetry.battery.level}%` }}
@@ -474,16 +702,30 @@ const PhoneView = ({ glassPanel }: { glassPanel?: string }) => {
             </div>
           </div>
 
-          <div className="bg-[#111] border border-white/5 rounded-2xl p-5 hover:border-purple-500/30 transition-all">
+          <div className={`rounded-2xl p-5 transition-all border ${
+            isDark
+              ? 'bg-[#111] border-white/5 hover:border-purple-500/30'
+              : 'bg-white/40 border-black/10 hover:border-purple-400'
+          }`}>
             <div className="flex justify-between items-center mb-3">
-              <span className="text-[10px] font-bold text-zinc-500 tracking-widest">STORAGE</span>
+              <span className={`text-[10px] font-bold tracking-widest ${
+                isDark ? 'text-zinc-500' : 'text-[#5A6B5A]'
+              }`}>
+                STORAGE
+              </span>
               <RiDatabase2Line className="text-orange-500" />
             </div>
             <div className="flex justify-between items-end mb-2">
-              <h4 className="text-3xl font-black text-white">{telemetry.storage.used}</h4>
-              <span className="text-[10px] font-mono text-zinc-500">{telemetry.storage.total}</span>
+              <h4 className={`text-3xl font-black ${isDark ? 'text-white' : 'text-[#1A1F1A]'}`}>
+                {telemetry.storage.used}
+              </h4>
+              <span className={`text-[10px] font-mono ${isDark ? 'text-zinc-500' : 'text-[#5A6B5A]'}`}>
+                {telemetry.storage.total}
+              </span>
             </div>
-            <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
+            <div className={`w-full rounded-full h-1.5 overflow-hidden ${
+              isDark ? 'bg-zinc-800' : 'bg-white/50'
+            }`}>
               <div
                 className="bg-orange-500 h-1.5 shadow-[0_0_10px_rgba(249,115,22,0.8)]"
                 style={{ width: `${telemetry.storage.percent}%` }}
@@ -494,27 +736,51 @@ const PhoneView = ({ glassPanel }: { glassPanel?: string }) => {
       </div>
 
       <div className="w-1/3 flex justify-center relative">
-        <div className="w-full max-w-[320px] h-162.5 bg-black rounded-[3rem] border-12 border-[#1a1a1a] shadow-[0_0_50px_rgba(168,85,247,0.1)] relative overflow-hidden flex flex-col">
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 w-28 h-7 bg-black rounded-full z-20 flex items-center justify-end px-3 gap-2 shadow-md">
-            <div className="w-2 h-2 rounded-full bg-purple-500/50"></div>
+        <div className={`w-full max-w-[320px] h-162.5 rounded-[3rem] border-12 overflow-hidden flex flex-col relative ${
+          isDark
+            ? 'bg-black border-[#1a1a1a] shadow-[0_0_50px_rgba(168,85,247,0.1)]'
+            : 'bg-white/50 border-white/60 shadow-[0_0_50px_rgba(46,204,143,0.1)]'
+        }`}>
+          <div className={`absolute top-2 left-1/2 -translate-x-1/2 w-28 h-7 rounded-full z-20 flex items-center justify-end px-3 gap-2 shadow-md ${
+            isDark ? 'bg-black' : 'bg-white/80'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${isDark ? 'bg-purple-500/50' : 'bg-purple-300'}`}></div>
             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
           </div>
           <img ref={screenRef} alt="" className="w-full h-full object-cover" />
-          <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]"></div>
+          <div className={`absolute inset-0 pointer-events-none ${
+            isDark
+              ? 'shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]'
+              : 'shadow-[inset_0_0_20px_rgba(0,0,0,0.1)]'
+          }`}></div>
         </div>
       </div>
 
       <div className="w-1/4 flex flex-col h-162.5 relative">
-        <div className="bg-[#111] border border-white/5 rounded-2xl p-6 flex flex-col h-full shadow-lg">
-          <div className="flex items-center gap-3 mb-8 pb-4 border-b border-white/5">
-            <div className="p-2 bg-purple-500/10 rounded-lg">
-              <RiTerminalBoxLine className="text-purple-400" size={20} />
+        <div className={`rounded-2xl p-6 flex flex-col h-full shadow-lg border ${
+          isDark
+            ? 'bg-[#111] border-white/5'
+            : 'bg-white/55 border-white/80'
+        }`}>
+          <div className={`flex items-center gap-3 mb-8 pb-4 border-b ${
+            isDark ? 'border-white/5' : 'border-black/10'
+          }`}>
+            <div className={`p-2 rounded-lg ${
+              isDark
+                ? 'bg-purple-500/10'
+                : 'bg-purple-100'
+            }`}>
+              <RiTerminalBoxLine className={isDark ? 'text-purple-400' : 'text-purple-600'} size={20} />
             </div>
             <div>
-              <h3 className="text-xs font-bold text-white tracking-widest uppercase">
+              <h3 className={`text-xs font-bold tracking-widest uppercase ${
+                isDark ? 'text-white' : 'text-[#1A1F1A]'
+              }`}>
                 SYSTEM CONTROLS
               </h3>
-              <span className="text-[10px] text-purple-400 font-mono flex items-center gap-1">
+              <span className={`text-[10px] font-mono flex items-center gap-1 ${
+                isDark ? 'text-purple-400' : 'text-purple-600'
+              }`}>
                 NEURAL UPLINK SECURED
               </span>
             </div>
@@ -522,51 +788,87 @@ const PhoneView = ({ glassPanel }: { glassPanel?: string }) => {
 
           <div className="grid grid-cols-2 gap-4 mb-auto">
             <button
-              onClick={() => executeQuickCommand('camera')}
-              className="group flex flex-col items-center justify-center gap-3 p-6 bg-black/50 border border-white/5 hover:border-purple-500/50 hover:bg-purple-500/10 rounded-2xl transition-all"
+              onClick={() => executeQuickCommand("camera")}
+              className={`group flex flex-col items-center justify-center gap-3 p-6 rounded-2xl transition-all border ${
+                isDark
+                  ? 'bg-black/50 border-white/5 hover:border-purple-500/50 hover:bg-purple-500/10'
+                  : 'bg-white/30 border-black/10 hover:border-purple-400 hover:bg-purple-100'
+              }`}
             >
               <RiCameraLensLine
                 size={28}
-                className="text-zinc-500 group-hover:text-purple-400 transition-colors"
+                className={`transition-colors ${
+                  isDark
+                    ? 'text-zinc-500 group-hover:text-purple-400'
+                    : 'text-[#5A6B5A] group-hover:text-purple-600'
+                }`}
               />
-              <span className="text-[10px] font-bold text-white tracking-widest">CAMERA</span>
+              <span className={`text-[10px] font-bold tracking-widest ${
+                isDark ? 'text-white' : 'text-[#1A1F1A]'
+              }`}>
+                CAMERA
+              </span>
             </button>
             <button
-              onClick={() => executeQuickCommand('lock')}
-              className="group flex flex-col items-center justify-center gap-3 p-6 bg-black/50 border border-white/5 hover:border-purple-500/50 hover:bg-purple-500/10 rounded-2xl transition-all"
+              onClick={() => executeQuickCommand("lock")}
+              className={`group flex flex-col items-center justify-center gap-3 p-6 rounded-2xl transition-all border ${
+                isDark
+                  ? 'bg-black/50 border-white/5 hover:border-purple-500/50 hover:bg-purple-500/10'
+                  : 'bg-white/30 border-black/10 hover:border-purple-400 hover:bg-purple-100'
+              }`}
             >
               <RiLockPasswordLine
                 size={28}
-                className="text-zinc-500 group-hover:text-purple-400 transition-colors"
+                className={`transition-colors ${
+                  isDark
+                    ? 'text-zinc-500 group-hover:text-purple-400'
+                    : 'text-[#5A6B5A] group-hover:text-purple-600'
+                }`}
               />
-              <span className="text-[10px] font-bold text-white tracking-widest">LOCK</span>
+              <span className={`text-[10px] font-bold tracking-widest ${
+                isDark ? 'text-white' : 'text-[#1A1F1A]'
+              }`}>
+                LOCK
+              </span>
             </button>
             <button
-              onClick={() => executeQuickCommand('wake')}
-              className="group flex flex-col items-center justify-center gap-3 p-6 bg-black/50 border border-white/5 hover:border-purple-500/50 hover:bg-purple-500/10 rounded-2xl transition-all"
+              onClick={() => executeQuickCommand("wake")}
+              className={`group flex flex-col items-center justify-center gap-3 p-6 rounded-2xl transition-all border ${
+                isDark
+                  ? 'bg-black/50 border-white/5 hover:border-purple-500/50 hover:bg-purple-500/10'
+                  : 'bg-white/30 border-black/10 hover:border-purple-400 hover:bg-purple-100'
+              }`}
             >
               <RiSunLine
                 size={28}
-                className="text-zinc-500 group-hover:text-purple-400 transition-colors"
+                className={`transition-colors ${
+                  isDark
+                    ? 'text-zinc-500 group-hover:text-purple-400'
+                    : 'text-[#5A6B5A] group-hover:text-purple-600'
+                }`}
               />
-              <span className="text-[10px] font-bold text-white tracking-widest">WAKE</span>
+              <span className="text-[10px] font-bold text-white tracking-widest">
+                WAKE
+              </span>
             </button>
             <button
-              onClick={() => executeQuickCommand('home')}
+              onClick={() => executeQuickCommand("home")}
               className="group flex flex-col items-center justify-center gap-3 p-6 bg-black/50 border border-white/5 hover:border-purple-500/50 hover:bg-purple-500/10 rounded-2xl transition-all"
             >
               <RiHome5Line
                 size={28}
                 className="text-zinc-500 group-hover:text-purple-400 transition-colors"
               />
-              <span className="text-[10px] font-bold text-white tracking-widest">HOME</span>
+              <span className="text-[10px] font-bold text-white tracking-widest">
+                HOME
+              </span>
             </button>
           </div>
 
           <div className="mb-6 p-4 bg-purple-500/5 border border-purple-500/20 rounded-xl">
             <p className="text-[10px] text-purple-400 font-mono leading-relaxed text-center">
-              IRIS is listening via the primary neural audio interface. Voice commands for app
-              execution are online.
+              IRIS is listening via the primary neural audio interface. Voice
+              commands for app execution are online.
             </p>
           </div>
 
@@ -579,7 +881,7 @@ const PhoneView = ({ glassPanel }: { glassPanel?: string }) => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default PhoneView
+export default PhoneView;

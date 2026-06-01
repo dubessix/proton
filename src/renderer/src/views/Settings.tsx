@@ -253,32 +253,50 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
 
   const { theme, toggleTheme, isDark } = useTheme();
 
-  const cardClass =
-    "bg-(--color-surface) border border-(--color-border) p-6 md:p-8 rounded-2xl flex flex-col gap-5 hover:border-white/20 transition-all shadow-lg dark:bg-[#0f0f13] dark:border-white/10";
-  const inputContainerClass =
-    "flex items-center bg-(--color-input-bg) border border-(--color-border) rounded-lg px-4 py-3 focus-within:border-emerald-300 dark:focus-within:border-white/30 focus-within:bg-white dark:focus-within:bg-black transition-all duration-300 w-full dark:bg-[#050505]";
-  const titleClass =
-    "text-sm font-semibold text-(--color-text) dark:text-white flex items-center gap-2";
+  const cardClass = isDark
+    ? "bg-[#0f0f13] border border-white/10 p-6 md:p-8 rounded-2xl flex flex-col gap-5 hover:border-white/20 transition-all shadow-lg"
+    : "bg-white/55 border border-white/80 p-6 md:p-8 rounded-2xl flex flex-col gap-5 hover:border-white/30 transition-all shadow-sm";
+
+  const inputContainerClass = isDark
+    ? "flex items-center bg-[#050505] border border-white/10 rounded-lg px-4 py-3 focus-within:border-white/30 focus-within:bg-black transition-all duration-300 w-full"
+    : "flex items-center bg-white/60 border border-black/10 rounded-lg px-4 py-3 focus-within:border-[#2ECC8F]/30 focus-within:bg-white transition-all duration-300 w-full";
+
+  const titleClass = isDark
+    ? "text-sm font-semibold text-white flex items-center gap-2"
+    : "text-sm font-semibold text-[#1A1F1A] flex items-center gap-2";
 
   return (
-    <div className="flex-1 p-6 md:p-10 lg:p-16 flex flex-col items-center bg-(--color-background) dark:bg-[#030303] min-h-screen text-(--color-text) dark:text-[#E4E6EB] overflow-y-auto scrollbar-small">
+    <div
+      className={`flex-1 p-6 md:p-10 lg:p-16 flex flex-col items-center min-h-screen overflow-y-auto scrollbar-small ${isDark ? "bg-[#030303] text-[#E4E6EB]" : "bg-[#EEF2EF] text-[#1A1F1A]"}`}
+    >
       <motion.div
         className="w-full max-w-4xl flex flex-col gap-8"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
       >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/10 pb-6">
+        <div
+          className={`flex flex-col md:flex-row md:items-center justify-between gap-6 border-b pb-6 ${isDark ? "border-white/10" : "border-black/10"}`}
+        >
           <div className="flex items-center gap-5">
-            <div className="p-4 bg-[#111] rounded-2xl border border-white/10 flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.03)]">
-              <GiArtificialIntelligence size={36} className="text-white" />
+            <div
+              className={`p-4 rounded-2xl border flex items-center justify-center ${isDark ? "bg-[#111] border-white/10 shadow-[0_0_15px_rgba(255,255,255,0.03)]" : "bg-white/50 border-black/10 shadow-sm"}`}
+            >
+              <GiArtificialIntelligence
+                size={36}
+                className={isDark ? "text-white" : "text-[#1A1F1A]"}
+              />
             </div>
             <div>
-              <h2 className="text-3xl font-bold tracking-tight text-white">
+              <h2
+                className={`text-3xl font-bold tracking-tight ${isDark ? "text-white" : "text-[#1A1F1A]"}`}
+              >
                 Command Center
               </h2>
-              <p className="text-xs text-zinc-400 font-mono mt-1 tracking-widest flex items-center gap-2 uppercase">
+              <p
+                className={`text-xs font-mono mt-1 tracking-widest flex items-center gap-2 uppercase ${isDark ? "text-zinc-400" : "text-[#5A6B5A]"}`}
+              >
                 <RiRecordCircleLine
-                  className={`${isSystemActive ? "text-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" : "text-zinc-600"}`}
+                  className={`${isSystemActive ? (isDark ? "text-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]" : "text-[#2ECC8F] animate-pulse") : isDark ? "text-zinc-600" : "text-[#8FA08F]"}`}
                   size={14}
                 />
                 {isSystemActive ? "System Online" : "System Offline"}
@@ -286,28 +304,30 @@ const SettingsView = ({ isSystemActive }: SettingsProps) => {
             </div>
           </div>
 
-          <div className="flex bg-[#0a0a0c] p-1 rounded-xl border border-white/10 w-full md:w-fit shadow-lg overflow-x-auto scrollbar-none">
+          <div
+            className={`flex p-1 rounded-xl border w-full md:w-fit shadow-lg overflow-x-auto scrollbar-none ${isDark ? "bg-[#0a0a0c] border-white/10" : "bg-white/50 border-black/10"}`}
+          >
             <button
               onClick={() => setActiveTab("updates")}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "updates" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "updates" ? isDark ? "bg-white text-black shadow-md" : "bg-[#2ECC8F] text-white shadow-md" : isDark ? "text-zinc-500 hover:text-white hover:bg-white/5" : "text-[#8FA08F] hover:text-[#5A6B5A] hover:bg-black/5"}`}
             >
               <RiTerminalWindowLine size={16} /> SYSTEM
             </button>
             <button
               onClick={() => setActiveTab("general")}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "general" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "general" ? isDark ? "bg-white text-black shadow-md" : "bg-[#2ECC8F] text-white shadow-md" : isDark ? "text-zinc-500 hover:text-white hover:bg-white/5" : "text-[#8FA08F] hover:text-[#5A6B5A] hover:bg-black/5"}`}
             >
               <RiSettings4Line size={16} /> GENERAL
             </button>
             <button
               onClick={() => setActiveTab("keys")}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "keys" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "keys" ? isDark ? "bg-white text-black shadow-md" : "bg-[#2ECC8F] text-white shadow-md" : isDark ? "text-zinc-500 hover:text-white hover:bg-white/5" : "text-[#8FA08F] hover:text-[#5A6B5A] hover:bg-black/5"}`}
             >
               <RiPlugLine size={16} /> API KEYS
             </button>
             <button
               onClick={() => setActiveTab("security")}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "security" ? "bg-white text-black shadow-md" : "text-zinc-500 hover:text-white hover:bg-white/5"}`}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold tracking-widest rounded-lg transition-all duration-300 ${activeTab === "security" ? isDark ? "bg-white text-black shadow-md" : "bg-[#2ECC8F] text-white shadow-md" : isDark ? "text-zinc-500 hover:text-white hover:bg-white/5" : "text-[#8FA08F] hover:text-[#5A6B5A] hover:bg-black/5"}`}
             >
               <RiShieldKeyholeLine size={16} /> SECURITY
             </button>

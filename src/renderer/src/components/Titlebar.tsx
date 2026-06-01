@@ -1,33 +1,39 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from "react";
 import {
   RiSubtractLine,
   RiCloseLine,
   RiCheckboxBlankLine,
-  RiCheckboxMultipleBlankLine
-} from 'react-icons/ri'
+  RiCheckboxMultipleBlankLine,
+} from "react-icons/ri";
+import { useTheme } from "@renderer/hooks/useTheme";
 
 const TitleBar = () => {
-  const [isMaximized, setIsMaximized] = useState(false)
-  const [isMac, setIsMac] = useState(false)
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [isMac, setIsMac] = useState(false);
+  const { isDark } = useTheme();
 
   useEffect(() => {
     if (window.electron && window.electron.process) {
-      setIsMac(window.electron.process.platform === 'darwin')
+      setIsMac(window.electron.process.platform === "darwin");
     } else {
-      setIsMac(navigator.userAgent.toLowerCase().includes('mac'))
+      setIsMac(navigator.userAgent.toLowerCase().includes("mac"));
     }
-  }, [])
+  }, []);
 
-  const minimize = () => window.electron.ipcRenderer.send('window-min')
+  const minimize = () => window.electron.ipcRenderer.send("window-min");
   const toggleMaximize = () => {
-    setIsMaximized(!isMaximized)
-    window.electron.ipcRenderer.send('window-max')
-  }
-  const close = () => window.electron.ipcRenderer.send('window-close')
+    setIsMaximized(!isMaximized);
+    window.electron.ipcRenderer.send("window-max");
+  };
+  const close = () => window.electron.ipcRenderer.send("window-close");
 
   return (
-    <div className="w-full h-14 flex items-center justify-between px-0 bg-zinc-950/80 backdrop-blur-2xl border-b border-zinc-800/50 drag-region select-none z-50 relative ">
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
+    <div
+      className={`w-full h-14 flex items-center justify-between px-0 backdrop-blur-2xl border-b drag-region select-none z-50 relative ${isDark ? "bg-zinc-950/80 border-zinc-800/50" : "bg-white/40 border-black/10"}`}
+    >
+      <div
+        className={`absolute bottom-0 left-0 right-0 h-px bg-linear-to-r from-transparent ${isDark ? "via-emerald-500/20" : "via-[#2ECC8F]/20"} to-transparent`}
+      />
 
       <div className="flex items-center h-full pl-5 pr-3 gap-3 z-50 no-drag">
         {isMac ? (
@@ -92,10 +98,10 @@ const TitleBar = () => {
               key={i}
               className="w-0.75 bg-emerald-400 rounded-full animate-pulse"
               style={{
-                height: i === 0 || i === 3 ? '60%' : '100%',
+                height: i === 0 || i === 3 ? "60%" : "100%",
                 animationDelay: `${i * 0.15}s`,
-                animationDuration: '1.4s',
-                boxShadow: '0 0 8px rgba(52, 211, 153, 0.5)'
+                animationDuration: "1.4s",
+                boxShadow: "0 0 8px rgba(52, 211, 153, 0.5)",
               }}
             />
           ))}
@@ -107,7 +113,7 @@ const TitleBar = () => {
           </span>
           <span className="text-[11px] text-zinc-600 font-mono">//</span>
           <span className="text-[11px] font-medium text-zinc-500 tracking-widest uppercase font-mono">
-            {isMac ? 'macOS' : 'SYSTEM'}
+            {isMac ? "macOS" : "SYSTEM"}
           </span>
         </div>
 
@@ -115,7 +121,7 @@ const TitleBar = () => {
           <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-30 animate-ping" />
           <span
             className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"
-            style={{ boxShadow: '0 0 10px rgba(52, 211, 153, 0.7)' }}
+            style={{ boxShadow: "0 0 10px rgba(52, 211, 153, 0.7)" }}
           />
         </div>
       </div>
@@ -132,7 +138,7 @@ const TitleBar = () => {
           <button
             onClick={toggleMaximize}
             className="w-14 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-white/5 transition-all duration-200"
-            title={isMaximized ? 'Restore' : 'Maximize'}
+            title={isMaximized ? "Restore" : "Maximize"}
           >
             {isMaximized ? (
               <RiCheckboxMultipleBlankLine size={15} strokeWidth={1.5} />
@@ -152,7 +158,7 @@ const TitleBar = () => {
 
       {isMac && <div className="w-25" />}
     </div>
-  )
-}
+  );
+};
 
-export default TitleBar
+export default TitleBar;

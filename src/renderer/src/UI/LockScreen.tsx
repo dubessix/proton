@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import gsap from "gsap";
 import { themeClasses } from "../utils/themeClasses";
 import { useThemeStore } from "../store/theme-store";
+import { useTheme } from "../hooks/useTheme";
 
 interface LockScreenProps {
   onUnlock: () => void;
@@ -45,6 +46,7 @@ export default function LockScreen({ onUnlock }: LockScreenProps) {
   const laserRef = useRef<HTMLDivElement>(null);
 
   const [time, setTime] = useState(new Date().toLocaleTimeString());
+  const { isDark } = useTheme();
 
   useEffect(() => {
     const timer = setInterval(
