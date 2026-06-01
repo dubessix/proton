@@ -118,8 +118,8 @@ export class GeminiLiveService {
     }
 
     let cloudUser = {
-      name: localStorage.getItem('iris_user_name') || 'Harsh',
-      email: 'Not linked'
+      name: localStorage.getItem('iris_user_name') || 'Debjeet Dhar',
+      email: 'myfastpc2009@gmail.com'
     }
 
     try {

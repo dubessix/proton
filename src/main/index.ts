@@ -54,6 +54,18 @@ let mainWindow: BrowserWindow | null = null
 let isOverlayMode = false
 let secureConfigPath = ''
 
+// ✅ FIX 1: GPU/WebGL fixes for Linux BEFORE app ready
+// Must be called before app.whenReady()
+app.commandLine.appendSwitch('enable-webgl')
+app.commandLine.appendSwitch('ignore-gpu-blacklist')
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('disable-gpu-sandbox')
+app.commandLine.appendSwitch('use-angle', 'swiftshader')
+app.commandLine.appendSwitch('enable-webrtc-hide-local-ips-with-mdns', 'false')
+app.commandLine.appendSwitch('disable-features', 'WebRtcHideLocalIpsWithMdns')
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+
+
 // These need to be done early but after electron module is ready
 function initializeApp() {
   try {
@@ -87,14 +99,15 @@ function createWindow(): void {
     show: true,
     fullscreen: false,
     autoHideMenuBar: false,
-    frame: true,
+    frame: false,
     transparent: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       backgroundThrottling: false,
-      webSecurity: false
+      webSecurity: false,
+      contextIsolation: true
     }
   })
 
@@ -162,9 +175,9 @@ app.whenReady().then(async () => {
   
   electronApp.setAppUserModelId('com.electron')
 
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
-  autoUpdater.checkForUpdatesAndNotify()
+  // autoUpdater.autoDownload = true
+  // autoUpdater.autoInstallOnAppQuit = true
+  // autoUpdater.checkForUpdatesAndNotify()
 
   autoUpdater.on('update-available', (info) => {
     dialog.showMessageBox({
@@ -233,6 +246,11 @@ app.whenReady().then(async () => {
       systemPreferences.askForMediaAccess('camera')
     }
   }
+
+   // ✅ FIX 3: Add missing get-app-version handler
+  ipcMain.handle('get-app-version', () => {
+    return app.getVersion()
+  })
 
   ipcMain.handle('secure-save-keys', async (_, { groqKey, geminiKey }) => {
     try {
@@ -304,41 +322,54 @@ app.whenReady().then(async () => {
       mainWindow.webContents.send('oauth-callback', url)
     }
   })
-
-  registerLockSystem()
-  registerSecurityVault()
-  registerPhantomKeyboard()
-  registerScreenPeeler()
-  registerDropZoneControl(ipcMain)
-  registerWorkflowManager()
-  registerWebsiteBuilder()
-  registerWidgetMaker()
-  registerDeepResearch({ ipcMain })
-  registerOracle({ ipcMain })
-  registerWormhole({ ipcMain })
-  registerPermanentMemory({ ipcMain, app })
-  registerTelekinesis({ ipcMain })
-  registerIrisCoder({ ipcMain, app })
-  registerRealityHacker(ipcMain)
-  registerAdbHandlers(ipcMain)
-  registerLocationHandlers(ipcMain)
-  registerGmailHandlers(ipcMain)
-  registerGalleryHandlers(ipcMain)
-  registerterminalControl(ipcMain)
-  registerGhostControl(ipcMain)
-  registerWebAgent(ipcMain)
-  registerNotesHandlers(ipcMain)
-  registerAppLauncher(ipcMain)
-  registerDirLoader(ipcMain)
-  registerFileOpen(ipcMain)
-  registerFileSearch(ipcMain)
-  registerFileRead(ipcMain)
-  registerFileWrite(ipcMain)
-  registerFileOps(ipcMain)
-  registerFileScanner(ipcMain)
-  registerSystemHandlers(ipcMain)
-  registerIpcHandlers({ ipcMain, app })
-
+ // ✅ FIX 4: Wrap ALL handlers in try/catch so one failure
+  // doesn't crash the whole app
+  const handlers = [
+    () => registerLockSystem(),
+    () => registerSecurityVault(),
+    () => registerPhantomKeyboard(),
+    () => registerScreenPeeler(),
+    () => registerDropZoneControl(ipcMain),
+    () => registerWorkflowManager(),
+    () => registerWebsiteBuilder(),
+    () => registerWidgetMaker(),
+    () => registerDeepResearch({ ipcMain }),
+    () => registerOracle({ ipcMain }),
+    () => registerWormhole({ ipcMain }),
+    () => registerPermanentMemory({ ipcMain, app }),
+    () => registerTelekinesis({ ipcMain }),
+    () => registerIrisCoder({ ipcMain, app }),
+    () => registerRealityHacker(ipcMain),
+    () => registerAdbHandlers(ipcMain),
+    () => registerLocationHandlers(ipcMain),
+    () => registerGmailHandlers(ipcMain),
+    () => registerGalleryHandlers(ipcMain),
+    () => registerterminalControl(ipcMain),
+    () => registerGhostControl(ipcMain),
+    () => registerWebAgent(ipcMain),
+    () => registerNotesHandlers(ipcMain),
+    () => registerAppLauncher(ipcMain),
+    () => registerDirLoader(ipcMain),
+    () => registerFileOpen(ipcMain),
+    () => registerFileSearch(ipcMain),
+    () => registerFileRead(ipcMain),
+    () => registerFileWrite(ipcMain),
+    () => registerFileOps(ipcMain),
+    () => registerFileScanner(ipcMain),
+    () => registerSystemHandlers(ipcMain),
+    () => registerIpcHandlers({ ipcMain, app }),
+    // ✅ Telegram bot
+    // () => registerTelegramBot(ipcMain),
+  ]
+ 
+  for (const register of handlers) {
+    try {
+      register()
+    } catch (err) {
+      console.error(`❌ Handler failed: ${String(err)}`)
+    }
+  }
+ 
   ipcMain.handle('get-screen-source', async () => {
     const sources = await desktopCapturer.getSources({ types: ['screen'] })
     return sources[0]?.id

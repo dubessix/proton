@@ -1,104 +1,233 @@
+for chnage config.json show ing
 
-﻿
-react-dom_client.js?v=3365b9ae:14338 Download the React DevTools for a better development experience: https://react.dev/link/react-devtools
-VM123 renderer_init:2 Electron Security Warning (Disabled webSecurity) This renderer process has "webSecurity" disabled. This
-  exposes users of this app to severe security risks.
+index.html file is not found in /src/renderer directory.
 
-For more information and help, consult
-https://electronjs.org/docs/tutorial/security.
-This warning will not show up
-once the app is packaged.
-VM123 renderer_init:2 Electron Security Warning (allowRunningInsecureContent) This renderer process has "allowRunningInsecureContent"
-  enabled. This exposes users of this app to severe security risks.
+error during start dev server and electron app:
 
-  
-For more information and help, consult
-https://electronjs.org/docs/tutorial/security.
-This warning will not show up
-once the app is packaged.
-VM123 renderer_init:2 Electron Security Warning (Insecure Content-Security-Policy) This renderer process has either no Content Security
-  Policy set or a policy with "unsafe-eval" enabled. This exposes users of
-  this app to unnecessary security risks.
+Error: build.rollupOptions.input option is required in the electron vite renderer config.
 
-For more information and help, consult
-https://electronjs.org/docs/tutorial/security.
-This warning will not show up
-once the app is packaged.
-face-api__js.js?v=3365b9ae:1603 Initialization of backend webgl failed
-face-api__js.js?v=3365b9ae:1603 Error: WebGL is not supported on this device
-    at new o (:5173/@fs/home/debje…v=3365b9ae:6287:314)
-    at Object.factory (:5173/@fs/home/debje…s?v=3365b9ae:7432:9)
-    at t.initializeBackend (:5173/@fs/home/debje…?v=3365b9ae:1586:14)
-    at t.initializeBackendsAndReturnBest (:5173/@fs/home/debje…?v=3365b9ae:1619:27)
-    at t.get [as backend] (:5173/@fs/home/debje…?v=3365b9ae:1532:18)
-    at t.makeTensor (:5173/@fs/home/debje…?v=3365b9ae:1734:37)
-    at _n (:5173/@fs/home/debje…v=3365b9ae:2747:130)
-    at Fn (:5173/@fs/home/debje…s?v=3365b9ae:2729:9)
-    at o (:5173/@fs/home/debje…v=3365b9ae:11936:10)
-    at cf (:5173/@fs/home/debje…v=3365b9ae:11937:38)
-:5173/#/:1 Uncaught (in promise) 
+    at BasicMinimalPluginContext.configResolved (file:///home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/node_modules/electron-vite/dist/chunks/lib-q6ns0vZr.js:571:23)
+
+    at file:///home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/node_modules/vite/dist/node/chunks/node.js:34730:87
+
+    at Array.map (<anonymous>)
+
+    at resolveConfig (file:///home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/node_modules/vite/dist/node/chunks/node.js:34730:68)
+
+    at async _createServer (file:///home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/node_modules/vite/dist/node/chunks/node.js:26179:65)
+
+    at async createServer (file:///home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/node_modules/electron-vite/dist/chunks/lib-7y7CgM8M.js:58:22)
+
+    at async CAC.<anonymous> (file:///home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/node_modules/electron-vite/dist/cli.js:67:9)
+
+debjeet-dhar@jeet-developer:~/Desktop/Dukanlink/saas1/proton$
+
+and
+
+dev log Uncaught (in promise)
 Object
-4
-:5173/#/:1 Uncaught (in promise) Error: Error invoking remote method 'get-app-version': Error: No handler registered for 'get-app-version'
+msg
+:
+"operation is manually canceled"
+type
+:
+"cancelation"
+[[Prototype]]
+:
+Object
+before in prosma
+ink/saas1/proton$ npm run dev
 
-and 
+> iris-ai@1.3.0 dev
+> electron-vite dev
+
+vite v8.0.15 building ssr environment for development...
+Warning: Invalid output options (1 issue found)
+
+- For the "interop". Invalid key: Expected never but received "interop".
+  (node:9983) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/postcss.config.js?t=1780318106268 is not specified and it doesn't parse as CommonJS.
+  Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+  To eliminate this warning, add "type": "module" to /home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/package.json.
+  (Use `node --trace-warnings ...` to show where the warning was created)
+  transforming (71) node_modules/electron-updater/out
+  transforming (88) node_modules/@xenova/transformers
+  transforming (119) node_modules/electron-updater/ou
+  transforming (124) node_modules/loudness/impl/darwi
+  transforming (214) node_modules/googleapis/build/sr
+  transforming (216) node_modules/googleapis/build/sr
+  transforming (218) node_modules/googleapis/build/sr
+  transforming (219) node_modules/googleapis/build/sr
+  transforming (222) node_modules/googleapis/build/sr
+  transforming (223) node_modules/googleapis/build/sr
+  transforming (224) node_modules/googleapis/build/sr
+  transforming (229) node_modules/googleapis/build/sr
+  ✓ 2385 modules transformed.
+  out/main/addon.node 14.92 kB
+  out/main/chunk-Cek0wNdY.js 2.13 kB
+  out/main/dist-BqvjOomG.js 2.53 kB
+  out/main/multipart-parser-D-bKPKc-.js 8.78 kB
+  out/main/multipart-parser-CG1V6bya.js 8.78 kB
+  out/main/multipart-parser-BmPf0cDH.js 8.79 kB
+  out/main/chunks-CyELfv9m.js 11.95 kB
+  out/main/coerce-qevt6Vmm.js 17.35 kB
+  out/main/src-C6ClITCc.js 22.14 kB
+  out/main/src-BfcxzU83.js 42.42 kB
+  out/main/src-BbbwH31v.js 42.46 kB
+  out/main/src-DyeZ5yQC.js 42.50 kB
+  out/main/prompt-B-B0Ouzr.js 50.08 kB
+  out/main/from-DEj0mZMJ.js 173.55 kB
+  out/main/follow-redirects-CzzIWTgW.js 266.61 kB
+  out/main/dist-DzP6JdK8.js 849.25 kB
+  out/main/transformers-Bixtb-Xr.js 1,678.06 kB
+  out/main/index.js 37,360.89 kB
+
+[EVAL] Use of direct `eval` function is strongly discouraged as it poses security risks and may cause issues with minification.
+
+- Use of direct `eval` here. in node_modules/onnxruntime-web/dist/ort-web.node.js at 62147..62151
+  │
+  │ Help: Consider using indirect eval. For more information, check the documentation: https://rolldown.rs/guide/troubleshooting#avoiding-direct-eval
+
+[PLUGIN_TIMINGS] Your build spent significant time in plugins. Here is a breakdown:
+
+- vite:node-asset (59%)
+- vite:node-worker (29%)
+- vite:module-path (11%)
+  See https://rolldown.rs/options/checks#plugintimings for more details.
+
+✓ built in 40.81s
+
+electron main process built successfully
+
+---
+
+vite v8.0.15 building ssr environment for development...
+✓ 3 modules transformed.
+out/preload/index.js 2.60 kB
+
+✓ built in 55ms
+
+electron preload scripts built successfully
+
+---
+
+dev server running for the electron renderer process at:
+
+➜ Local: http://localhost:5173/
+➜ Network: use --host to expose
+
+starting electron app...
 
 Prism language components not available: Error: Cannot find module './prism-markup'
 Require stack:
+
 - /home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js
-    at Module._resolveFilename (node:internal/modules/cjs/loader:1483:15)
-    at s._resolveFilename (node:electron/js2c/browser_init:2:140113)
-    at wrapResolveFilename (node:internal/modules/cjs/loader:1056:27)
-    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1101:12)
-    at require.resolve (node:internal/modules/helpers:171:31)
-    at /home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:880047:33
-    at handleId (/home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:879885:41)
-    at /home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:879888:19
-    at Array.map (<anonymous>)
-    at handleId (/home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:879887:41) {
+  at Module.\_resolveFilename (node:internal/modules/cjs/loader:1483:15)
+  at s.\_resolveFilename (node:electron/js2c/browser_init:2:140113)
+  at wrapResolveFilename (node:internal/modules/cjs/loader:1056:27)
+  at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1101:12)
+  at require.resolve (node:internal/modules/helpers:171:31)
+  at /home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:880047:33
+  at handleId (/home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:879885:41)
+  at /home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:879888:19
+  at Array.map (<anonymous>)
+  at handleId (/home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:879887:41) {
   code: 'MODULE_NOT_FOUND',
   requireStack: [
-    '/home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js'
+  '/home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js'
   ]
-}
-(node:63445) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
-(Use `electron --trace-deprecation ...` to show where the warning was created)
-APPIMAGE env is not defined, current application is not an AppImage
-[63520:0601/115446.269281:ERROR:ui/gl/egl_util.cc:92] EGL Driver message (Error) eglCreateContext: Requested version is not supported
-[63520:0601/115446.270054:ERROR:ui/gl/gl_context_egl.cc:337] eglCreateContext ES 3.0 failed with error EGL_BAD_ATTRIBUTE
-[63520:0601/115446.279570:ERROR:ui/gl/egl_util.cc:92] EGL Driver message (Error) eglCreateContext: Requested version is not supported
-[63520:0601/115446.289658:ERROR:ui/gl/gl_context_egl.cc:326] eglCreateContext ES 3.0 failed with error EGL_BAD_ATTRIBUTE. ES version fallback is disabled.
-[63520:0601/115446.291299:ERROR:gpu/config/gpu_info_collector.cc:100] gl::init::CreateGLContext failed
-[63520:0601/115446.293704:ERROR:gpu/config/gpu_info_collector.cc:602] Could not create context for info collection.
-[63520:0601/115446.294720:ERROR:gpu/ipc/service/gpu_init.cc:116] CollectGraphicsInfo failed.
-checkForUpdatesAndNotify called, downloadPromise is null
-[63520:0601/115446.326959:ERROR:components/viz/service/main/viz_main_impl.cc:190] Exiting GPU process due to errors during initialization
-[63559:0601/115446.959918:ERROR:ui/gl/egl_util.cc:92] EGL Driver message (Error) eglCreateContext: Requested version is not supported
-[63559:0601/115446.962408:ERROR:ui/gl/gl_context_egl.cc:337] eglCreateContext ES 3.0 failed with error EGL_BAD_ATTRIBUTE
-[63559:0601/115446.965387:ERROR:ui/gl/egl_util.cc:92] EGL Driver message (Error) eglCreateContext: Requested version is not supported
-[63559:0601/115446.965607:ERROR:ui/gl/gl_context_egl.cc:326] eglCreateContext ES 3.0 failed with error EGL_BAD_ATTRIBUTE. ES version fallback is disabled.
-[63559:0601/115446.965710:ERROR:gpu/config/gpu_info_collector.cc:100] gl::init::CreateGLContext failed
-[63559:0601/115446.979977:ERROR:gpu/config/gpu_info_collector.cc:602] Could not create context for info collection.
-[63559:0601/115446.980221:ERROR:gpu/ipc/service/gpu_init.cc:116] CollectGraphicsInfo failed.
-[63559:0601/115446.993469:ERROR:components/viz/service/main/viz_main_impl.cc:190] Exiting GPU process due to errors during initialization
-[63590:0601/115447.568099:ERROR:ui/gl/egl_util.cc:92] EGL Driver message (Error) eglCreateContext: Requested version is not supported
-[63590:0601/115447.568314:ERROR:ui/gl/gl_context_egl.cc:337] eglCreateContext ES 3.0 failed with error EGL_BAD_ATTRIBUTE
-[63590:0601/115447.570164:ERROR:ui/gl/egl_util.cc:92] EGL Driver message (Error) eglCreateContext: Requested version is not supported
-[63590:0601/115447.570338:ERROR:ui/gl/gl_context_egl.cc:326] eglCreateContext ES 3.0 failed with error EGL_BAD_ATTRIBUTE. ES version fallback is disabled.
-[63590:0601/115447.570416:ERROR:gpu/config/gpu_info_collector.cc:100] gl::init::CreateGLContext failed
-[63590:0601/115447.570475:ERROR:gpu/config/gpu_info_collector.cc:602] Could not create context for info collection.
-[63590:0601/115447.570537:ERROR:gpu/ipc/service/gpu_init.cc:116] CollectGraphicsInfo failed.
-[63590:0601/115447.644751:ERROR:components/viz/service/main/viz_main_impl.cc:190] Exiting GPU process due to errors during initialization
-Error occurred in handler for 'get-app-version': Error: No handler registered for 'get-app-version'
-    at Session.<anonymous> (node:electron/js2c/browser_init:2:116164)
-    at Session.emit (node:events:509:28)
-Error occurred in handler for 'get-app-version': Error: No handler registered for 'get-app-version'
-    at Session.<anonymous> (node:electron/js2c/browser_init:2:116164)
-    at Session.emit (node:events:509:28)
-Error occurred in handler for 'get-app-version': Error: No handler registered for 'get-app-version'
-    at Session.<anonymous> (node:electron/js2c/browser_init:2:116164)
-    at Session.emit (node:events:509:28)
-Error occurred in handler for 'get-app-version': Error: No handler registered for 'get-app-version'
-    at Session.<anonymous> (node:electron/js2c/browser_init:2:116164)
-    at Session.emit (node:events:509:28)
-[63445:0601/115646.038110:ERROR:content/browser/browser_main_loop.cc:274] GLib-GObject: ../../../gobject/gsignal.c:2685: instance '0x3041073bd50' has no handler with id '8173'
+  }
+  (node:10307) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+  (Use `electron --trace-deprecation ...` to show where the warning was created)clear
+
+after prisma
+npm run dev
+
+> iris-ai@1.3.0 dev
+> electron-vite dev
+
+vite v8.0.15 building ssr environment for development...
+Warning: Invalid output options (1 issue found)
+
+- For the "interop". Invalid key: Expected never but received "interop".
+  (node:11643) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/postcss.config.js?t=1780318482442 is not specified and it doesn't parse as CommonJS.
+  Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+  To eliminate this warning, add "type": "module" to /home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/package.json.
+  (Use `node --trace-warnings ...` to show where the warning was created)
+  ✓ 2385 modules transformed.
+  out/main/addon.node 14.92 kB
+  out/main/chunk-Cek0wNdY.js 2.13 kB
+  out/main/dist-BqvjOomG.js 2.53 kB
+  out/main/multipart-parser-D-bKPKc-.js 8.78 kB
+  out/main/multipart-parser-CG1V6bya.js 8.78 kB
+  out/main/multipart-parser-BmPf0cDH.js 8.79 kB
+  out/main/chunks-CyELfv9m.js 11.95 kB
+  out/main/coerce-qevt6Vmm.js 17.35 kB
+  out/main/src-C6ClITCc.js 22.14 kB
+  out/main/src-BfcxzU83.js 42.42 kB
+  out/main/src-BbbwH31v.js 42.46 kB
+  out/main/src-DyeZ5yQC.js 42.50 kB
+  out/main/prompt-B-B0Ouzr.js 50.08 kB
+  out/main/from-DEj0mZMJ.js 173.55 kB
+  out/main/follow-redirects-CzzIWTgW.js 266.61 kB
+  out/main/dist-DzP6JdK8.js 849.25 kB
+  out/main/transformers-Bixtb-Xr.js 1,678.06 kB
+  out/main/index.js 37,360.89 kB
+
+[EVAL] Use of direct `eval` function is strongly discouraged as it poses security risks and may cause issues with minification.
+
+- Use of direct `eval` here. in node_modules/onnxruntime-web/dist/ort-web.node.js at 62147..62151
+  │
+  │ Help: Consider using indirect eval. For more information, check the documentation: https://rolldown.rs/guide/troubleshooting#avoiding-direct-eval
+
+[PLUGIN_TIMINGS] Your build spent significant time in plugins. Here is a breakdown:
+
+- vite:node-asset (46%)
+- vite:node-worker (34%)
+- vite:module-path (19%)
+  See https://rolldown.rs/options/checks#plugintimings for more details.
+
+✓ built in 17.94s
+
+electron main process built successfully
+
+---
+
+vite v8.0.15 building ssr environment for development...
+✓ 3 modules transformed.
+out/preload/index.js 2.60 kB
+
+✓ built in 101ms
+
+electron preload scripts built successfully
+
+---
+
+dev server running for the electron renderer process at:
+
+➜ Local: http://localhost:5173/
+➜ Network: use --host to expose
+
+starting electron app...
+
+Prism language components not available: Error: Cannot find module './prism-markup'
+Require stack:
+
+- /home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js
+  at Module.\_resolveFilename (node:internal/modules/cjs/loader:1483:15)
+  at s.\_resolveFilename (node:electron/js2c/browser_init:2:140113)
+  at wrapResolveFilename (node:internal/modules/cjs/loader:1056:27)
+  at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1101:12)
+  at require.resolve (node:internal/modules/helpers:171:31)
+  at /home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:880047:33
+  at handleId (/home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:879885:41)
+  at /home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:879888:19
+  at Array.map (<anonymous>)
+  at handleId (/home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js:879887:41) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+  '/home/debjeet-dhar/Desktop/Dukanlink/saas1/proton/out/main/index.js'
+  ]
+  }
+  (node:11796) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+  (Use `electron --trace-deprecation ...` to show where the warning was created)
+  [11796:0601/182734.302826:ERROR:content/browser/browser_main_loop.cc:274] GLib-GObject: ../../../gobject/gsignal.c:2685: instance '0x381c1078a9d0' has no handler with id '6264'
