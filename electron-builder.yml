@@ -1,38 +1,95 @@
 appId: com.harshpandey.iris
 productName: IRIS AI
-directories:
-  buildResources: build
 
+directories:
+  output: dist
+  buildResources: resources
+
+# 🔴 FIX: Store compression prevents memory issues with large AI models
 compression: store
 
 files:
+  - "out/**/*"
+  - "resources/**/*"
+  - "package.json"
   - "!**/.vscode/*"
   - "!src/*"
   - "!electron.vite.config.{js,ts,mjs,cjs}"
   - "!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
   - "!{.env,.env.*,.npmrc,pnpm-lock.yaml}"
   - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,credentials.json}"
+  # 🔴 FIX: Block massive local databases and AI model folders from being copied into the final app
   - "!models/**/*"
   - "!vectordb/**/*"
   - "!lancedb/**/*"
   - "!userData/**/*"
+  - "!**/*.{md,MD}"
+  - "!**/node_modules/**/{test,__tests__,tests,powered-test,example,examples}"
+  - "!**/node_modules/**/*.d.ts"
+  - "!**/node_modules/**/.bin"
+  - "!**/{.DS_Store,.git,.gitignore,.gitattributes,.idea,.vscode}"
 
+asar: true
 asarUnpack:
-  - resources/**
+  - "resources/**"
+  - "node_modules/@nut-tree-fork/**"
+  - "node_modules/sharp/**"
+  - "node_modules/face-api.js/**"
+  - "node_modules/tesseract.js/**"
+  - "node_modules/@xenova/transformers/**"
+  - "node_modules/onnxruntime-node/**"
+  - "node_modules/vectordb/**"
+  - "node_modules/screenshot-desktop/**"
+  - "node_modules/prismjs/**"
+  - "node_modules/loudness/**"
+  - "node_modules/node-window-manager/**"
+  - "node_modules/clipboardy/**"
+  - "node_modules/puppeteer/**"
+  - "node_modules/puppeteer-extra/**"
+  - "node_modules/puppeteer-extra-plugin-stealth/**"
 
 linux:
   target:
     - target: deb
-  maintainer: Harsh Pandey
+      arch:
+        - x64
+  maintainer: "Harsh Pandey <support@iris.ai>"
   category: Utility
   icon: resources/icon.png
+  # ✅ FIXED: Description is now a single string to prevent parsing errors
+  description: "IRIS is a high-performance local-first AI Operating System with voice control, biometric face authentication, desktop automation and intelligent task execution."
+  desktop:
+    entry:
+      Name: IRIS AI
+      Comment: Voice-First AI Assistant
+      Type: Application
+      Categories: Utility;Office;Development;
+      Keywords: ai;assistant;voice;automation;iris;
+      StartupWMClass: iris-ai
 
 deb:
   artifactName: ${name}-${version}.${ext}
+  priority: optional
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libdrm2
+    - libgbm1
+    - libxcb-dri3-0
+    - libsecret-1-0
+    - libasound2 | libasound2t64
+    - libuuid1
 
 npmRebuild: true
+nodeGypRebuild: false
+buildDependenciesFromSource: false
 
 publish:
   provider: github
-  owner: dubessix
-  repo: proton
+  owner: 201Harsh
+  repo: IRIS-AI

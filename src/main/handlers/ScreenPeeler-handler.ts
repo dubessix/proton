@@ -13,26 +13,24 @@ import fs from "fs/promises";
 import fsSync from "fs";
 
 import clipboardy from "clipboardy";
-import Prism from "prismjs";
 
-// Safely load Prism language components
+// ✅ Safe Prism loader - works in both dev and packaged .deb
+let Prism: any = null;
 try {
-  const loadLanguages = require("prismjs/components/");
-  loadLanguages([
-    "javascript",
-    "typescript",
-    "python",
-    "jsx",
-    "tsx",
-    "json",
-    "html",
-    "css",
-    "bash",
-    "yaml",
-  ]);
-} catch (error) {
-  // Prism components may not be available in production bundles
-  console.warn("Prism language components not available:", error);
+  Prism = require("prismjs");
+  const langs = [
+    "javascript", "typescript", "python",
+    "jsx", "tsx", "json", "css", "bash", "yaml", "markup"
+  ];
+  for (const lang of langs) {
+    try {
+      require(`prismjs/components/prism-${lang}`);
+    } catch (e) {
+      // Skip missing language silently
+    }
+  }
+} catch (e) {
+  console.warn("[Prism] Disabled:", (e as Error).message);
 }
 
 let peelerWindow: BrowserWindow | null = null;
@@ -110,13 +108,11 @@ export default function registerScreenPeeler() {
               if (!isDrawing) return;
               isDrawing = false;
               
-              // HIDE THE GREEN BOX IMMEDIATELY BEFORE SENDING IPC
               selection.style.display = 'none';
               
               const width = parseInt(selection.style.width);
               const height = parseInt(selection.style.height);
               
-              // Wait 50ms to ensure the DOM is painted without the box
               setTimeout(() => {
                 if (width > 20 && height > 20) {
                   ipcRenderer.send('peeler-result', { x: parseInt(selection.style.left), y: parseInt(selection.style.top), width, height });
@@ -453,13 +449,24 @@ export default function registerScreenPeeler() {
 
         await executeClipboardyWrite(extractedCode);
 
-        const grammar =
-          Prism.languages[detectedLanguage] || Prism.languages.javascript;
-        const highlightedHTML = Prism.highlight(
-          extractedCode,
-          grammar,
-          detectedLanguage,
-        );
+        // ✅ Safe Prism highlighting with fallback
+        let highlightedHTML = extractedCode;
+        if (Prism) {
+          try {
+            const grammar =
+              Prism.languages[detectedLanguage] ||
+              Prism.languages["javascript"];
+            if (grammar) {
+              highlightedHTML = Prism.highlight(
+                extractedCode,
+                grammar,
+                detectedLanguage,
+              );
+            }
+          } catch (e) {
+            console.warn("[Prism] Highlight failed:", (e as Error).message);
+          }
+        }
 
         const escapedRaw = extractedCode
           .replace(/\\/g, "\\\\")

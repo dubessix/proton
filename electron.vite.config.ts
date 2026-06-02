@@ -1,95 +1,112 @@
-import { resolve } from "path";
-import { defineConfig } from "electron-vite";
-import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
+import { resolve } from 'path'
+import { defineConfig } from 'electron-vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
+  // ⚡ MAIN PROCESS
   main: {
-    resolve: {
-      externalConditions: ['node'],
-      alias: {
-        'electron': 'electron'  // Ensure electron resolves to the actual module
-      }
-    },
     build: {
       rollupOptions: {
-        external: ["electron", "electron-store", "puppeteer-extra", "puppeteer-extra-plugin-stealth", "puppeteer-extra-plugin-block-resources", "@nut-tree-fork/nut-js", "prismjs"],
-        preserveEntrySignatures: 'strict',
+        input: {
+          index: resolve(__dirname, 'src/main/index.ts')
+        },
         output: {
           format: 'cjs',
-          interop: 'auto',
-          // Prevent Rollup from optimizing away the named imports
-          exports: 'named'
-        }
-      },
-    },
-    plugins: [
-      {
-        name: 'fix-electron-imports-post',
-        apply: 'build',
-        enforce: 'post',
-        async generateBundle(outputOptions, bundle) {
-          for (const [fileName, asset] of Object.entries(bundle)) {
-            if (fileName.endsWith('index.js') && typeof asset.code === 'string') {
-              let code = asset.code;
-              
-              // Remove the problematic __toESM wrapper if it exists
-              code = code.replace(
-                /let electron = require\("electron"\);\s*electron = require_chunk\.__toESM\(electron[^;]*\);/g,
-                'let electron;'
-              );
-              
-              // Replace top-level "let electron = require("electron");" with lazy getter
-              code = code.replace(
-                /^let electron = require\("electron"\);/m,
-                `let _electron = null;
-function getElectron() {
-  if (!_electron) {
-    try {
-      // In Electron, the module system is patched to handle electron
-      _electron = require("electron");
-    } catch (e) {
-      // Fallback: try to load from the preload context
-      if (global.electron) {
-        _electron = global.electron;
-      } else if (typeof window !== 'undefined' && window.electron) {
-        _electron = window.electron;
-      } else {
-        throw new Error("Electron module not available");
+          entryFileNames: '[name].js'
+        },
+        external: [
+          'electron',
+          'electron-store',
+          'electron-updater',
+          'puppeteer',
+          'puppeteer-extra',
+          'puppeteer-extra-plugin-stealth',
+          '@nut-tree-fork/nut-js',
+          'prismjs',
+          'face-api.js',
+          'bcryptjs',
+          'loudness',
+          'screenshot-desktop',
+          'node-window-manager',
+          'clipboardy',
+          '@google-cloud/local-auth',
+          'googleapis',
+          'tesseract.js',
+          '@xenova/transformers',
+          'vectordb',
+          'pdf-parse',
+          'mammoth',
+          'sharp',
+          'canvas',
+          'onnxruntime-node',
+          'onnxruntime-web',
+          'node-telegram-bot-api',
+        ]
       }
     }
-  }
-  return _electron;
-}
-const electron = new Proxy({}, {
-  get(target, prop) {
-    const e = getElectron();
-    return e ? e[prop] : undefined;
-  }
-});`
-              );
-              
-              asset.code = code;
+  },
+
+  // 🔐 PRELOAD
+  preload: {
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/preload/index.ts')
+        },
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js'
+        },
+        external: ['electron']
+      }
+    }
+  },
+
+  // 💻 RENDERER
+  renderer: {
+    root: resolve(__dirname, 'src/renderer'),
+    publicDir: resolve(__dirname, 'src/renderer/src/public'),
+
+    resolve: {
+      alias: {
+        '@renderer': resolve(__dirname, 'src/renderer/src')
+      }
+    },
+
+    plugins: [react(), tailwindcss()],
+
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/renderer/index.html')
+        },
+        output: {
+          // ✅ FIXED: Function instead of Object
+          manualChunks: (id) => {
+            if (id.includes('framer-motion') || id.includes('gsap')) {
+              return 'ui-motion'
+            }
+            if (id.includes('@monaco-editor')) {
+              return 'editor'
+            }
+            if (id.includes('@huggingface')) {
+              return 'huggingface'
+            }
+            if (id.includes('react-markdown') || id.includes('remark-gfm')) {
+              return 'markdown'
+            }
+            if (
+              id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/react-router-dom/')
+            ) {
+              return 'vendor'
             }
           }
         }
       }
-    ]
-  },
-  preload: {
-    build: {
-      rollupOptions: {
-        external: ["electron"],
-      },
-    },
-  },
-  renderer: {
-    publicDir: resolve("src/renderer/src/public"),
-    resolve: {
-      alias: {
-        "@renderer": resolve("src/renderer/src"),
-      },
-    },
-    plugins: [react(), tailwindcss()],
-  },
-});
+    }
+  }
+})
