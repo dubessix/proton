@@ -1,3 +1,4 @@
+
 import { handleNavigation, handleOpenMap } from '@renderer/tools/Earth-View'
 import { base64ToFloat32, downsampleTo16000, float32ToBase64PCM } from '../utils/audioUtils'
 import { getRunningApps } from './get-apps'
@@ -117,8 +118,8 @@ export class GeminiLiveService {
       throw new Error('NO_API_KEY')
     }
 
-    let cloudUser = {
-      name: localStorage.getItem('iris_user_name') || 'Debjeet Dhar',
+    const cloudUser = {
+      name: localStorage.getItem('iris_user_name') || 'Debjeet dhar',
       email: 'myfastpc2009@gmail.com'
     }
 
@@ -143,7 +144,7 @@ export class GeminiLiveService {
     const activePersonality =
       storedPersonality && storedPersonality.trim() !== ''
         ? storedPersonality
-        : `- **Creator:** Harsh Pandey.\n- **Tone:** Witty, Hinglish-friendly.\n- **Rule:** Never sound like a support bot. You are the Ghost in the machine.\n- **Your Instagram Handle:** https://www.instagram.com/irisx.ai/ - open it in Instagram only!.`
+        : `- **Creator:** Debjeet Dhar.\n- **Tone:** Witty, jarvis Hinglish-friendly.\n- **Rule:** Never sound like a support bot. You are the Ghost in the machine.\n- **Your main resone to help me like tony strak Jarvis.`
 
     const IRIS_SYSTEM_INSTRUCTION = `
 # 👁️ IRIS — YOUR INTELLIGENT COMPANION (Project JARVIS)
@@ -1537,187 +1538,6 @@ ${JSON.stringify(history)}
       } catch (err) {}
     }
 
-    
-    // ========================================
-    // ✅ TELEGRAM BOT LISTENERS
-    // All commands route through IRIS AI
-    // using existing tools in setupMsg
-    // ========================================
-    const ipc = window.electron?.ipcRenderer
-    if (ipc) {
-
-      // ✅ Text message from Telegram → IRIS AI with ALL tools
-      ipc.on('telegram-ai', async (_: any, { message }: any) => {
-        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-          ipc.send('telegram-ai-reply', '⚠️ IRIS is offline. Turn on IRIS first.')
-          return
-        }
-
-        this.socket.send(JSON.stringify({
-          clientContent: {
-            turns: [{
-              role: 'user',
-              parts: [{
-                text: `[TELEGRAM REMOTE COMMAND]: ${message}
-                
-RULES:
-1. Execute using available tools directly.
-2. Reply with SHORT text only (no audio for Telegram).
-3. Confirm what you did in 1-2 lines max.`
-              }]
-            }],
-            turnComplete: true
-          }
-        }))
-
-        let fullResponse = ''
-        let responseTimer: ReturnType<typeof setTimeout>
-
-        const handler = async (event: MessageEvent) => {
-          try {
-            const raw = event.data instanceof Blob
-              ? await (event.data as Blob).text()
-              : event.data
-            const data = JSON.parse(raw)
-
-            if (data?.serverContent?.outputTranscription?.text) {
-              fullResponse += data.serverContent.outputTranscription.text
-            }
-
-            if (data?.serverContent?.modelTurn?.parts) {
-              for (const part of data.serverContent.modelTurn.parts) {
-                if (part.text) fullResponse += part.text
-              }
-            }
-
-            if (data?.serverContent?.turnComplete) {
-              clearTimeout(responseTimer)
-              this.socket?.removeEventListener('message', handler)
-              ipc.send('telegram-ai-reply', fullResponse.trim() || '✅ Done!')
-            }
-          } catch (e) {}
-        }
-
-        this.socket.addEventListener('message', handler)
-
-        responseTimer = setTimeout(() => {
-          this.socket?.removeEventListener('message', handler)
-          ipc.send('telegram-ai-reply', fullResponse.trim() || '⏱ Timeout. Try again.')
-        }, 30000)
-      })
-
-      // ✅ Voice message from Telegram → IRIS AI
-      ipc.on('telegram-voice', async (_: any, { voicePath }: any) => {
-        if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-          ipc.send('telegram-voice-reply', '⚠️ IRIS is offline.')
-          return
-        }
-
-        this.socket.send(JSON.stringify({
-          clientContent: {
-            turns: [{
-              role: 'user',
-              parts: [{
-                text: `[TELEGRAM VOICE MESSAGE]:
-Voice file at: ${voicePath}
-User sent voice from Telegram.
-Ask them to type command for now.`
-              }]
-            }],
-            turnComplete: true
-          }
-        }))
-
-        let fullResponse = ''
-        let voiceTimer: ReturnType<typeof setTimeout>
-
-        const voiceHandler = async (event: MessageEvent) => {
-          try {
-            const raw = event.data instanceof Blob
-              ? await (event.data as Blob).text()
-              : event.data
-            const data = JSON.parse(raw)
-
-            if (data?.serverContent?.outputTranscription?.text) {
-              fullResponse += data.serverContent.outputTranscription.text
-            }
-
-            if (data?.serverContent?.modelTurn?.parts) {
-              for (const part of data.serverContent.modelTurn.parts) {
-                if (part.text) fullResponse += part.text
-              }
-            }
-
-            if (data?.serverContent?.turnComplete) {
-              clearTimeout(voiceTimer)
-              this.socket?.removeEventListener('message', voiceHandler)
-              ipc.send('telegram-voice-reply', fullResponse.trim() || '🎤 Voice received! Type your command.')
-            }
-          } catch (e) {}
-        }
-
-        this.socket.addEventListener('message', voiceHandler)
-
-        voiceTimer = setTimeout(() => {
-          this.socket?.removeEventListener('message', voiceHandler)
-          ipc.send('telegram-voice-reply', fullResponse.trim() || '🎤 Please type your command.')
-        }, 15000)
-      })
-
-      // ✅ Screenshot
-      ipc.on('tg-screenshot-req', async () => {
-        try {
-          const imgPath = await ipc.invoke('take-screenshot')
-          ipc.send('tg-screenshot-done', imgPath)
-        } catch (e: any) {
-          ipc.send('tg-screenshot-done', null)
-        }
-      })
-
-      // ✅ System status
-      ipc.on('tg-status-req', async () => {
-        try {
-          const status = await ipc.invoke('get-system-info')
-          ipc.send('tg-status-done', status)
-        } catch (e) {
-          ipc.send('tg-status-done', null)
-        }
-      })
-
-      // ✅ Emails
-      ipc.on('tg-emails-req', async () => {
-        try {
-          const result = await ipc.invoke('gmail-read', 5)
-          ipc.send('tg-emails-done', result?.speechText || '📭 No emails.')
-        } catch (e: any) {
-          ipc.send('tg-emails-done', `❌ ${e.message}`)
-        }
-      })
-
-      // ✅ Volume
-      ipc.on('tg-volume', async (_: any, level: number) => {
-        try {
-          await setVolume(level)
-        } catch (e) {}
-      })
-
-      // ✅ Lock
-      ipc.on('tg-lock', () => {
-        window.dispatchEvent(new CustomEvent('iris-lockdown'))
-      })
-
-      // ✅ Open app
-      ipc.on('tg-open-app', async (_: any, appName: string) => {
-        try {
-          await openApp(appName)
-        } catch (e) {}
-      })
-
-    }
-    // ========================================
-    // END TELEGRAM BOT LISTENERS
-    // ========================================
-
     this.socket.onclose = () => {
       this.disconnect()
     }
@@ -1867,19 +1687,6 @@ Ask them to type command for now.`
     if (this.analyser) {
       this.analyser.disconnect()
       this.analyser = null
-    }
-
-    // ✅ Cleanup Telegram listeners
-    const ipc = window.electron?.ipcRenderer
-    if (ipc) {
-      ipc.removeAllListeners('telegram-ai')
-      ipc.removeAllListeners('telegram-voice')
-      ipc.removeAllListeners('tg-screenshot-req')
-      ipc.removeAllListeners('tg-status-req')
-      ipc.removeAllListeners('tg-emails-req')
-      ipc.removeAllListeners('tg-volume')
-      ipc.removeAllListeners('tg-lock')
-      ipc.removeAllListeners('tg-open-app')
     }
   }
 }

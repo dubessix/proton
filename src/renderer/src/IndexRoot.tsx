@@ -16,8 +16,10 @@ import OracleWidget from "./Widgets/RagOrcaleWidget";
 import ResearchWidget from "./Widgets/DeepResearch";
 import SemanticWidget from "./Widgets/SematicSearch";
 import SmartDropZonesWidget from "./Widgets/SmartZoneWidget";
+import TelegramWidget from "./Widgets/TelegramWidget";
 import TitleBar from "./components/Titlebar";
 import { useThemeStore } from "./store/theme-store";
+import { executeToolFromTelegram } from "./services/telegram-tool-bridge";
 
 export type VisionMode = "camera" | "screen" | "none";
 
@@ -47,6 +49,25 @@ const IndexRoot = () => {
     );
     return () => {
       window.electron.ipcRenderer.removeAllListeners("overlay-mode");
+    };
+  }, []);
+
+  // ✅ Telegram bot tool bridge — handles tool calls from main-process bot
+  useEffect(() => {
+    const handler = async (
+      _e: any,
+      data: { requestId: string; name: string; args: any },
+    ) => {
+      const result = await executeToolFromTelegram(data.name, data.args);
+      window.electron.ipcRenderer.send("telegram-tool-response", {
+        requestId: data.requestId,
+        result,
+      });
+    };
+
+    window.electron.ipcRenderer.on("telegram-tool-request", handler);
+    return () => {
+      window.electron.ipcRenderer.removeAllListeners("telegram-tool-request");
     };
   }, []);
 
@@ -229,6 +250,7 @@ const IndexRoot = () => {
       <TerminalOverlay />
       <LiveCodingWidget />
       <ResearchWidget />
+      <TelegramWidget />
     </div>
   );
 };

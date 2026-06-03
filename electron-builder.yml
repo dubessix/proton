@@ -1,4 +1,4 @@
-appId: com.harshpandey.iris
+appId: com.debjeet.iris
 productName: IRIS AI
 
 directories:
@@ -53,9 +53,10 @@ linux:
     - target: deb
       arch:
         - x64
-  maintainer: "Harsh Pandey <support@iris.ai>"
+  maintainer: "debjeet dhar <support@iris.ai>"
   category: Utility
-  icon: resources/icon.png
+  # ✅ IMPORTANT FIX
+  icon: resources
   # ✅ FIXED: Description is now a single string to prevent parsing errors
   description: "IRIS is a high-performance local-first AI Operating System with voice control, biometric face authentication, desktop automation and intelligent task execution."
   desktop:
@@ -91,5 +92,5 @@ buildDependenciesFromSource: false
 
 publish:
   provider: github
-  owner: 201Harsh
-  repo: IRIS-AI
+  owner: debjeet
+  repo: proton

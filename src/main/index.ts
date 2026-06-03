@@ -1,3 +1,5 @@
+import 'dotenv/config'
+
 import {
   app,
   shell,
@@ -48,6 +50,7 @@ import registerScreenPeeler from './handlers/ScreenPeeler-handler'
 import registerPhantomKeyboard from './handlers/PhantomControl-handler'
 import registerSecurityVault from './security/Security'
 import registerLockSystem from './security/lock-system'
+import { irisTelegramBot } from './services/telegram-bot'
 import { autoUpdater } from 'electron-updater'
 
 let mainWindow: BrowserWindow | null = null
@@ -358,8 +361,7 @@ app.whenReady().then(async () => {
     () => registerFileScanner(ipcMain),
     () => registerSystemHandlers(ipcMain),
     () => registerIpcHandlers({ ipcMain, app }),
-    // ✅ Telegram bot
-    // () => registerTelegramBot(ipcMain),
+    
   ]
  
   for (const register of handlers) {
@@ -376,6 +378,16 @@ app.whenReady().then(async () => {
   })
 
   createWindow()
+
+  // ✅ Auto-start Telegram bot (3s delay = wait for renderer to be ready)
+  setTimeout(async () => {
+    const result = await irisTelegramBot.start()
+    if (result.success) {
+      console.log('🚀 [IRIS] Telegram bot active.')
+    } else {
+      console.warn('⚠️ [IRIS] Telegram bot did not start:', result.error)
+    }
+  }, 3000)
 
   globalShortcut.register('CommandOrControl+Shift+I', () => toggleOverlayMode())
   ipcMain.on('toggle-overlay', () => toggleOverlayMode())
@@ -398,8 +410,9 @@ app.whenReady().then(async () => {
   })
 })
 
-app.on('will-quit', () => {
+app.on('will-quit', async () => {
   globalShortcut.unregisterAll()
+  await irisTelegramBot.stop()
 })
 
 app.on('window-all-closed', () => {
