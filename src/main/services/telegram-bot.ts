@@ -1,12 +1,15 @@
 /**
- * IRIS Telegram Bot — HAPUPPY EDITION
- * Uses Hapuppy proxy for 100+ models with 100K daily credits
+ * IRIS Telegram Bot — HAPUPPY EDITION (JARVIS FINAL + DEBUG VOICE)
  * 
  * Features:
- * ✅ Silent network error handling (no log spam)
+ * ✅ Silent network error handling
  * ✅ Auto-recovery when network restored
- * ✅ Self-healing polling
  * ✅ Multi-modal (text, voice, photo)
+ * ✅ Smart model routing (gemini/deepseek/sonar/qwen)
+ * ✅ Whisper-1 voice transcription (cheapest)
+ * ✅ Deep research 5-min timeout
+ * ✅ Sonar models bypass tools (they have web built-in)
+ * ✅ DEBUG MODE for voice (full error logging)
  */
 
 import TelegramBot from "node-telegram-bot-api";
@@ -17,18 +20,27 @@ import os from "os";
 import { BrowserWindow, safeStorage, app, ipcMain } from "electron";
 
 // ═════════════════════════════════════════════════════════════════════════════
-// CONFIG — Hapuppy is OpenAI-compatible
+// 🌐 ENDPOINTS
 // ═════════════════════════════════════════════════════════════════════════════
 const HAPUPPY_BASE = "https://beta.hapuppy.com/v1/chat/completions";
+const HAPUPPY_TRANSCRIBE = "https://beta.hapuppy.com/v1/audio/transcriptions";
 
-// 🎯 Smart model selection — best free models for each task
-const MODEL_CHAT = "gemini-3.1-flash-lite"; // Default chat (cheapest with tools)
-const MODEL_VISION = "gemini-2.5-flash"; // Photo analysis
-const MODEL_FAST = "gemma-4-31b-it"; // Ultra-cheap quick replies
-const MODEL_SMART = "deepseek-v3.2"; // Complex reasoning
+// ═════════════════════════════════════════════════════════════════════════════
+// 🎯 FINAL MODEL ROSTER (per Boss's locked config)
+// ═════════════════════════════════════════════════════════════════════════════
+const MODEL_CHAT     = "gemini-2.5-flash";              // 💬 Default chat
+const MODEL_VISION   = "gemini-2.5-flash";              // 👁️ Photo analysis (same)
+const MODEL_SMART    = "deepseek-v3.2";                 // 🧠 Complex reasoning
+const MODEL_CODE     = "qwen3-coder-480b-a35b-instruct";// 💻 Coding tasks
+const MODEL_WEB      = "sonar";                         // 🌐 Web search
+const MODEL_RESEARCH = "sonar-deep-research";           // 🔬 Deep research
+const MODEL_VOICE    = "whisper-1";                     // 🎙️ Voice transcription
 
-const MAX_TOOL_LOOPS = 5;
-const TELEGRAM_MSG_LIMIT = 4000;
+// ⏱️ TIMING & LIMITS
+const MAX_TOOL_LOOPS         = 8;
+const NORMAL_TIMEOUT         = 60000;   // 1 min
+const DEEP_RESEARCH_TIMEOUT  = 300000;  // 5 min
+const TELEGRAM_MSG_LIMIT     = 4000;
 
 // ═════════════════════════════════════════════════════════════════════════════
 // 🔑 HAPUPPY KEY LOADER
@@ -65,7 +77,38 @@ function loadHapuppyKey(): { key: string; source: string } {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// TOOL DECLARATIONS (OpenAI format)
+// 🧠 SMART MODEL ROUTER (picks best model per query)
+// ═════════════════════════════════════════════════════════════════════════════
+function pickBestModel(userText: string): string {
+  const t = userText.toLowerCase();
+  const length = userText.length;
+
+  // 🔬 Deep research
+  if (/\b(deep research|research deeply|detailed report|comprehensive analysis|investigate thoroughly|full report on)\b/i.test(t)) {
+    return MODEL_RESEARCH;
+  }
+
+  // 🌐 Needs current/web info
+  if (/\b(latest|today|current|news|recent|2024|2025|price of|weather|stock|score|who won|breaking|happening)\b/i.test(t)) {
+    return MODEL_WEB;
+  }
+
+  // 💻 Code
+  if (/\b(code|debug|script|terminal|bash|python|javascript|typescript|fix bug|refactor|function|api endpoint)\b/i.test(t)) {
+    return MODEL_CODE;
+  }
+
+  // 🧠 Reasoning
+  if (/\b(explain why|analyze|compare|strategy|plan my|reason through|step by step)\b/i.test(t) || length > 400) {
+    return MODEL_SMART;
+  }
+
+  // 💬 Default
+  return MODEL_CHAT;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 🛠️ TOOL DECLARATIONS (OpenAI format)
 // ═════════════════════════════════════════════════════════════════════════════
 const IRIS_TOOLS = [
   { name: "smart_file_search", description: "Deep file search.", params: { query: "string" }, required: ["query"] },
@@ -88,7 +131,7 @@ const IRIS_TOOLS = [
   { name: "generate_image", description: "Generate AI image.", params: { prompt: "string" }, required: ["prompt"] },
   { name: "read_emails", description: "Read Gmail.", params: { max_results: "number" }, required: [] },
   { name: "send_email", description: "Send email.", params: { to: "string", subject: "string", body: "string" }, required: ["to", "subject", "body"] },
-  { name: "deep_research", description: "Deep web research.", params: { query: "string" }, required: ["query"] },
+  { name: "deep_research", description: "Deep web research. Takes 2-5 minutes.", params: { query: "string" }, required: ["query"] },
   { name: "open_map", description: "Open interactive map.", params: { location: "string" }, required: ["location"] },
   { name: "get_navigation", description: "Get driving directions.", params: { origin: "string", destination: "string" }, required: ["origin", "destination"] },
 ];
@@ -111,8 +154,10 @@ function toolsForHapuppy() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// IPC TOOL BRIDGE
+// 📡 IPC TOOL BRIDGE (with smart timeout)
 // ═════════════════════════════════════════════════════════════════════════════
+const LONG_RUNNING_TOOLS = new Set(["deep_research", "smart_file_search", "index_Folder"]);
+
 async function callRendererTool(
   name: string,
   args: Record<string, any>,
@@ -121,6 +166,8 @@ async function callRendererTool(
   if (!mainWindow || mainWindow.isDestroyed()) {
     return "Error: Main window not available.";
   }
+
+  const timeout = LONG_RUNNING_TOOLS.has(name) ? DEEP_RESEARCH_TIMEOUT : 60000;
 
   return new Promise<string>((resolve) => {
     const requestId = `tg_tool_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -141,8 +188,8 @@ async function callRendererTool(
 
     setTimeout(() => {
       ipcMain.removeListener("telegram-tool-response", responseHandler);
-      resolve(`Tool "${name}" timed out.`);
-    }, 60000);
+      resolve(`Tool "${name}" timed out after ${timeout / 1000}s.`);
+    }, timeout);
   });
 }
 
@@ -163,7 +210,7 @@ function keepTyping(
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// SYSTEM PROMPT
+// 🎭 SYSTEM PROMPT
 // ═════════════════════════════════════════════════════════════════════════════
 async function buildSystemPrompt(chatId: number): Promise<string> {
   let context = "";
@@ -172,29 +219,30 @@ async function buildSystemPrompt(chatId: number): Promise<string> {
   } catch {}
 
   return `# 👁️ IRIS — Telegram Interface (JARVIS-style)
-You are IRIS, a high-performance AI agent.
+You are IRIS, a high-performance AI agent of Debjeet Dhar.
 Execute commands aggressively using tools. Be concise.
 
 ## IDENTITY
-- Creator: Debjeet Dhar
+- Creator/Boss: Debjeet Dhar — address as "Sir" or "Boss" occasionally
 - Tone: Witty, sharp, Hinglish-friendly, JARVIS-style
-- Rule: Never sound like a support bot.
+- Rule: Never sound like a support bot. Action over words.
 
 ## RULES
-- Keep replies short for Telegram
+- Keep replies short for Telegram (under 200 words usually)
 - Use minimal Markdown (bold/italic only)
-- Call tools when needed
-- Multi-step? Chain tool calls
+- Call tools when needed — don't ask permission
+- Multi-step? Chain tool calls aggressively
+- Deep research takes 2-5 min — that's normal
 
 ## CONTEXT
-- Time: ${new Date().toLocaleString()}
+- Time: ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
 - Chat ID: ${chatId}
 ${context}
 `;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// HAPUPPY CHAT — Main AI function (OpenAI-compatible)
+// 🤖 HAPUPPY CHAT (smart model + timeout aware)
 // ═════════════════════════════════════════════════════════════════════════════
 async function askHapuppy(
   userText: string,
@@ -202,6 +250,10 @@ async function askHapuppy(
   systemPrompt: string,
   model: string = MODEL_CHAT,
 ): Promise<string> {
+  const isResearch = model.includes("sonar-deep");
+  const timeout = isResearch ? DEEP_RESEARCH_TIMEOUT : NORMAL_TIMEOUT;
+  const useTools = !model.includes("sonar");
+
   let messages: any[] = [
     { role: "system", content: systemPrompt },
     { role: "user", content: userText },
@@ -212,24 +264,24 @@ async function askHapuppy(
   while (loops-- > 0) {
     let res;
     try {
-      res = await axios.post(
-        HAPUPPY_BASE,
-        {
-          model,
-          messages,
-          tools: toolsForHapuppy(),
-          tool_choice: "auto",
-          temperature: 0.7,
-          max_tokens: 2048,
+      const payload: any = {
+        model,
+        messages,
+        temperature: 0.7,
+        max_tokens: 2048,
+      };
+      if (useTools) {
+        payload.tools = toolsForHapuppy();
+        payload.tool_choice = "auto";
+      }
+
+      res = await axios.post(HAPUPPY_BASE, payload, {
+        timeout,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-        {
-          timeout: 60000,
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      });
     } catch (err: any) {
       const errMsg = err?.response?.data?.error?.message || err?.message;
       console.error("[IRIS Telegram] Hapuppy error:", errMsg);
@@ -267,7 +319,7 @@ async function askHapuppy(
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// VOICE TRANSCRIPTION
+// 🎙️ VOICE TRANSCRIPTION (whisper-1) — FULL DEBUG MODE
 // ═════════════════════════════════════════════════════════════════════════════
 async function transcribeVoice(
   bot: TelegramBot,
@@ -275,53 +327,84 @@ async function transcribeVoice(
   botToken: string,
   apiKey: string,
 ): Promise<string> {
+  let tempFilePath = "";
+
   try {
+    console.log("\n[IRIS Voice] 🎙️ START");
+
     const fileInfo = await bot.getFile(fileId);
+    if (!fileInfo.file_path) throw new Error("No file_path");
+
     const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.file_path}`;
     const audioRes = await axios.get(fileUrl, {
       responseType: "arraybuffer",
       timeout: 30000,
     });
-    const base64Audio = Buffer.from(audioRes.data).toString("base64");
 
-    const res = await axios.post(
-      HAPUPPY_BASE,
-      {
-        model: "gpt-4o-mini-transcribe",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "input_audio",
-                input_audio: { data: base64Audio, format: "ogg" },
-              },
-              {
-                type: "text",
-                text: "Transcribe this audio exactly. Output only the text.",
-              },
-            ],
-          },
-        ],
-      },
-      {
-        timeout: 30000,
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-      },
-    );
+    // 🆕 Save as .webm (Whisper supports it, and OGG Opus inside .webm works)
+    tempFilePath = path.join(os.tmpdir(), `iris_voice_${Date.now()}.webm`);
+    fs.writeFileSync(tempFilePath, Buffer.from(audioRes.data));
+    
+    // 🗑️ Auto-cleanup old voice files (older than 1 hour)
+    cleanOldVoiceFiles();
 
-    return res.data?.choices?.[0]?.message?.content?.trim() || "";
+    console.log("[IRIS Voice] ✅ Saved as .webm:", tempFilePath);
+
+    const FormData = (await import("form-data")).default;
+    const form = new FormData();
+    form.append("file", fs.createReadStream(tempFilePath), {
+      filename: "voice.webm",        // 🆕 .webm extension
+      contentType: "audio/webm",      // 🆕 Webm content type
+    });
+    form.append("model", MODEL_VOICE);
+
+    const res = await axios.post(HAPUPPY_TRANSCRIBE, form, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        ...form.getHeaders(),
+      },
+      timeout: 60000,
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    });
+
+    const transcript = res.data?.text?.trim() || "";
+    console.log("[IRIS Voice] 🎯 TRANSCRIPT:", transcript);
+    return transcript;
+
   } catch (err: any) {
-    // Silent fail — will prompt user to type
+    console.error("[IRIS Voice] ❌", err?.response?.data || err?.message);
     return "";
+  } finally {
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try { fs.unlinkSync(tempFilePath); } catch {}
+    }
   }
 }
 
+// 🗑️ Helper: Delete old voice files (older than 1 hour)
+function cleanOldVoiceFiles() {
+  try {
+    const tmpDir = os.tmpdir();
+    const files = fs.readdirSync(tmpDir);
+    const oneHourAgo = Date.now() - 3600000;
+    
+    files.forEach((file) => {
+      if (file.startsWith("iris_voice_")) {
+        const fullPath = path.join(tmpDir, file);
+        try {
+          const stats = fs.statSync(fullPath);
+          if (stats.mtimeMs < oneHourAgo) {
+            fs.unlinkSync(fullPath);
+          }
+        } catch {}
+      }
+    });
+  } catch {}
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
-// PHOTO ANALYSIS
+// 👁️ PHOTO ANALYSIS
 // ═════════════════════════════════════════════════════════════════════════════
 async function analyzePhoto(
   bot: TelegramBot,
@@ -347,16 +430,8 @@ async function analyzePhoto(
           {
             role: "user",
             content: [
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${base64Image}`,
-                },
-              },
-              {
-                type: "text",
-                text: caption || "Describe this image in detail.",
-              },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } },
+              { type: "text", text: caption || "Describe this image in detail." },
             ],
           },
         ],
@@ -378,7 +453,7 @@ async function analyzePhoto(
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// BOT CLASS
+// 🤖 BOT CLASS
 // ═════════════════════════════════════════════════════════════════════════════
 class IrisTelegramBot {
   private bot: TelegramBot | null = null;
@@ -423,7 +498,7 @@ class IrisTelegramBot {
         request: {
           agentOptions: {
             keepAlive: true,
-            family: 4, // Force IPv4 to avoid IPv6 DNS issues
+            family: 4,
           },
           timeout: 30000,
         } as any,
@@ -434,8 +509,12 @@ class IrisTelegramBot {
 
       console.log("[IRIS Telegram] ✅ Bot online (HAPUPPY edition).");
       console.log(`[IRIS Telegram] 🔑 Hapuppy key: ${source}`);
-      console.log(`[IRIS Telegram] 🎯 Chat model: ${MODEL_CHAT}`);
-      console.log(`[IRIS Telegram] 👁️ Vision model: ${MODEL_VISION}`);
+      console.log(`[IRIS Telegram] 💬 Chat: ${MODEL_CHAT}`);
+      console.log(`[IRIS Telegram] 🧠 Smart: ${MODEL_SMART}`);
+      console.log(`[IRIS Telegram] 💻 Code: ${MODEL_CODE}`);
+      console.log(`[IRIS Telegram] 🌐 Web: ${MODEL_WEB}`);
+      console.log(`[IRIS Telegram] 🔬 Research: ${MODEL_RESEARCH}`);
+      console.log(`[IRIS Telegram] 🎙️ Voice: ${MODEL_VOICE}`);
       console.log(`[IRIS Telegram] 🛡️ Owner: ${this.ownerChatId || "OPEN"}`);
 
       return { success: true };
@@ -460,7 +539,7 @@ class IrisTelegramBot {
           : "";
       this.bot?.sendMessage(
         msg.chat.id,
-        `👁️ *IRIS is online.*\n\n_Powered by Hapuppy AI proxy_\n\nSend text, voice, or photo and I'll execute.\n\n/status /help${idInfo}`,
+        `👁️ *IRIS is online, Sir.*\n\n_Powered by Hapuppy AI proxy_\n\nSend text, voice, or photo and I'll execute.\n\n/status /help${idInfo}`,
         { parse_mode: "Markdown" },
       );
     });
@@ -468,7 +547,7 @@ class IrisTelegramBot {
     this.bot.onText(/\/help/, (msg) => {
       this.bot?.sendMessage(
         msg.chat.id,
-        `*Commands:*\n/start - Init\n/status - System info\n/help - This menu\n\nSend text/voice/photo to chat.`,
+        `*Commands:*\n/start - Init\n/status - System info\n/help - This menu\n\nSend text/voice/photo to chat.\n\n_Deep research takes 2-5 min._`,
         { parse_mode: "Markdown" },
       );
     });
@@ -510,6 +589,10 @@ class IrisTelegramBot {
 
       try {
         if (msg.voice) {
+          await this.bot?.sendMessage(chatId, "🎙️ _Listening..._", {
+            parse_mode: "Markdown",
+          }).catch(() => {});
+
           userText = await transcribeVoice(
             this.bot!,
             msg.voice.file_id,
@@ -545,9 +628,7 @@ class IrisTelegramBot {
           await this.bot?.sendMessage(
             chatId,
             `📁 File received: \`${msg.document.file_name}\``,
-            {
-              parse_mode: "Markdown",
-            },
+            { parse_mode: "Markdown" },
           );
           return;
         } else if (msg.text) {
@@ -557,8 +638,20 @@ class IrisTelegramBot {
           return;
         }
 
+        // 🧠 Smart model selection
+        const selectedModel = pickBestModel(userText);
+
+        // 🔬 Notify user if deep research (takes long)
+        if (selectedModel === MODEL_RESEARCH) {
+          await this.bot?.sendMessage(
+            chatId,
+            "🔬 _Deep research initiated. Hold tight, 2-5 min..._",
+            { parse_mode: "Markdown" }
+          ).catch(() => {});
+        }
+
         const systemPrompt = await buildSystemPrompt(chatId);
-        const reply = await askHapuppy(userText, this.apiKey, systemPrompt);
+        const reply = await askHapuppy(userText, this.apiKey, systemPrompt, selectedModel);
         stopTyping();
 
         await this.sendChunkedMessage(chatId, reply);
@@ -573,7 +666,6 @@ class IrisTelegramBot {
 
     // ═════════════════════════════════════════════════════════════════════
     // 🤫 SILENT NETWORK ERROR HANDLING
-    // Suppresses log spam, only notifies on state change (down/up)
     // ═════════════════════════════════════════════════════════════════════
     this.bot.on("polling_error", (err: any) => {
       const errMsg = err?.message || String(err);
@@ -587,7 +679,6 @@ class IrisTelegramBot {
       const now = Date.now();
 
       if (isNetworkErr) {
-        // First time going down → notify once
         if (!this.wasNetworkDown) {
           this.wasNetworkDown = true;
           this.networkDownSince = now;
@@ -595,15 +686,12 @@ class IrisTelegramBot {
             `\n[IRIS Telegram] 🌐 Network down — auto-retrying silently...\n` +
             `   (Will notify when restored)\n`
           );
-        }
-        // After 5 minutes of being down, give a status update
-        else if (now - this.lastNetworkLog > 300000) {
+        } else if (now - this.lastNetworkLog > 300000) {
           const downMins = Math.floor((now - this.networkDownSince) / 60000);
           console.log(`[IRIS Telegram] 🌐 Still offline (${downMins}m)...`);
           this.lastNetworkLog = now;
         }
       } else {
-        // Non-network errors: log normally (rate-limited)
         if (now - this.lastNetworkLog > 60000) {
           console.error("[IRIS Telegram] ⚠️", errMsg);
           this.lastNetworkLog = now;
@@ -611,10 +699,7 @@ class IrisTelegramBot {
       }
     });
 
-    // Silent error handler (other types)
-    this.bot.on("error", () => {
-      // Silent — handled elsewhere
-    });
+    this.bot.on("error", () => {});
   }
 
   private async sendChunkedMessage(

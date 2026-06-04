@@ -67,6 +67,7 @@ export async function executeToolFromTelegram(
       case 'deep_research': return await runDeepResearch(args.query)
       case 'open_map': return await handleOpenMap(args.location)
       case 'get_navigation': return await handleNavigation(args.origin, args.destination)
+     
 
       default:
         return `Tool "${name}" not found.`

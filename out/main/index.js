@@ -79,14 +79,14 @@ let http = require("http");
 http = __toESM(http, 1);
 let zlib = require("zlib");
 zlib = __toESM(zlib, 1);
+let http2 = require("http2");
+http2 = __toESM(http2, 1);
 let node_window_manager = require("node-window-manager");
 let node_fs = require("node:fs");
 let node_process = require("node:process");
 node_process = __toESM(node_process, 1);
 let node_tty = require("node:tty");
 node_tty = __toESM(node_tty, 1);
-let http2 = require("http2");
-http2 = __toESM(http2, 1);
 let clipboardy = require("clipboardy");
 clipboardy = __toESM(clipboardy);
 let electron_store = require("electron-store");
@@ -196,9 +196,9 @@ var init_package$2 = __esmMin((() => {
 //#endregion
 //#region node_modules/dotenv/lib/main.js
 var require_main = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	var fs$29 = require("fs");
+	var fs$30 = require("fs");
 	var path$28 = require("path");
-	var os$8 = require("os");
+	var os$12 = require("os");
 	var crypto$9 = require("crypto");
 	var version = (init_package$2(), __toCommonJS(package_exports$2).default).version;
 	var LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/gm;
@@ -296,14 +296,14 @@ var require_main = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	function _vaultPath(options) {
 		let possibleVaultPath = null;
 		if (options && options.path && options.path.length > 0) if (Array.isArray(options.path)) {
-			for (const filepath of options.path) if (fs$29.existsSync(filepath)) possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
+			for (const filepath of options.path) if (fs$30.existsSync(filepath)) possibleVaultPath = filepath.endsWith(".vault") ? filepath : `${filepath}.vault`;
 		} else possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
 		else possibleVaultPath = path$28.resolve(process.cwd(), ".env.vault");
-		if (fs$29.existsSync(possibleVaultPath)) return possibleVaultPath;
+		if (fs$30.existsSync(possibleVaultPath)) return possibleVaultPath;
 		return null;
 	}
 	function _resolveHome(envPath) {
-		return envPath[0] === "~" ? path$28.join(os$8.homedir(), envPath.slice(1)) : envPath;
+		return envPath[0] === "~" ? path$28.join(os$12.homedir(), envPath.slice(1)) : envPath;
 	}
 	function _configVault(options) {
 		const debug = Boolean(options && options.debug);
@@ -331,7 +331,7 @@ var require_main = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		let lastError;
 		const parsedAll = {};
 		for (const path$94 of optionPaths) try {
-			const parsed = DotenvModule.parse(fs$29.readFileSync(path$94, { encoding }));
+			const parsed = DotenvModule.parse(fs$30.readFileSync(path$94, { encoding }));
 			DotenvModule.populate(parsedAll, parsed, options);
 		} catch (e) {
 			if (debug) _debug(`Failed to load ${path$94} ${e.message}`);
@@ -501,7 +501,7 @@ function registerIpcHandlers({ ipcMain, app }) {
 }
 //#endregion
 //#region src/main/logic/get-system-info.ts
-var runCommand$1 = (cmd) => {
+var runCommand$3 = (cmd) => {
 	return new Promise((resolve) => {
 		(0, child_process.exec)(cmd, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout) => {
 			if (error) {}
@@ -527,23 +527,76 @@ function getSystemCpuUsage() {
 	cpuLastSnapshot = cpus;
 	return total === 0 ? "0.0" : ((total - idle) / total * 100).toFixed(1);
 }
+function getOsName() {
+	const platform = os.default.platform();
+	if (platform === "win32") {
+		const release = os.default.release();
+		const major = parseInt(release.split(".")[0]);
+		const build = parseInt(release.split(".")[2] || "0");
+		if (major === 10 && build >= 22e3) return "Windows 11";
+		if (major === 10) return "Windows 10";
+		return `Windows ${major}`;
+	}
+	if (platform === "darwin") return `macOS ${os.default.release()}`;
+	if (platform === "linux") try {
+		const match = fs.default.readFileSync("/etc/os-release", "utf8").match(/PRETTY_NAME="(.+)"/);
+		return match ? match[1] : "Linux";
+	} catch {
+		return "Linux";
+	}
+	return platform;
+}
+async function getLinuxTemperature() {
+	try {
+		const thermalZones = fs.default.readdirSync("/sys/class/thermal").filter((z) => z.startsWith("thermal_zone"));
+		for (const zone of thermalZones) try {
+			const typePath = `/sys/class/thermal/${zone}/type`;
+			const tempPath = `/sys/class/thermal/${zone}/temp`;
+			const type = fs.default.readFileSync(typePath, "utf8").trim().toLowerCase();
+			if (type.includes("cpu") || type.includes("x86") || type.includes("coretemp")) {
+				const temp = parseInt(fs.default.readFileSync(tempPath, "utf8").trim());
+				return Math.round(temp / 1e3);
+			}
+		} catch {}
+		if (thermalZones.length > 0) {
+			const temp = parseInt(fs.default.readFileSync(`/sys/class/thermal/${thermalZones[0]}/temp`, "utf8").trim());
+			return Math.round(temp / 1e3);
+		}
+	} catch {}
+	try {
+		const match = (await runCommand$3("sensors -u 2>/dev/null | grep -m1 \"temp1_input\"")).match(/temp1_input:\s*([\d.]+)/);
+		if (match) return Math.round(parseFloat(match[1]));
+	} catch {}
+	return 50;
+}
+async function getMacTemperature() {
+	try {
+		const match = (await runCommand$3("osx-cpu-temp 2>/dev/null")).match(/([\d.]+)/);
+		if (match) return Math.round(parseFloat(match[1]));
+	} catch {}
+	return 50;
+}
 function registerSystemHandlers(ipcMain) {
 	ipcMain.removeHandler("get-installed-apps");
 	ipcMain.handle("get-installed-apps", async () => {
 		try {
-			if (os.default.platform() !== "win32") return [];
-			const jsonOutput = await runCommand$1(`powershell "Get-StartApps | Select-Object Name, AppID | ConvertTo-Json -Depth 1"`);
-			if (!jsonOutput) return [];
-			let rawData;
-			try {
-				rawData = JSON.parse(jsonOutput);
-			} catch (parseError) {
-				return [];
+			if (os.default.platform() === "win32") {
+				const jsonOutput = await runCommand$3(`powershell "Get-StartApps | Select-Object Name, AppID | ConvertTo-Json -Depth 1"`);
+				if (!jsonOutput) return [];
+				let rawData;
+				try {
+					rawData = JSON.parse(jsonOutput);
+				} catch (parseError) {
+					return [];
+				}
+				return (Array.isArray(rawData) ? rawData : [rawData]).filter((a) => a && a.Name && a.AppID).map((a) => ({
+					name: a.Name.trim(),
+					id: a.AppID.trim()
+				})).sort((a, b) => a.name.localeCompare(b.name));
 			}
-			return (Array.isArray(rawData) ? rawData : [rawData]).filter((a) => a && a.Name && a.AppID).map((a) => ({
-				name: a.Name.trim(),
-				id: a.AppID.trim()
-			})).sort((a, b) => a.name.localeCompare(b.name));
+			if (os.default.platform() === "linux") return await getLinuxInstalledApps();
+			if (os.default.platform() === "darwin") return await getMacInstalledApps();
+			return [];
 		} catch (e) {
 			return [];
 		}
@@ -552,6 +605,9 @@ function registerSystemHandlers(ipcMain) {
 	ipcMain.handle("get-system-stats", async () => {
 		const totalMem = os.default.totalmem();
 		const freeMem = os.default.freemem();
+		let temperature = 50;
+		if (os.default.platform() === "linux") temperature = await getLinuxTemperature();
+		else if (os.default.platform() === "darwin") temperature = await getMacTemperature();
 		return {
 			cpu: getSystemCpuUsage(),
 			memory: {
@@ -559,9 +615,9 @@ function registerSystemHandlers(ipcMain) {
 				free: (freeMem / 1024 ** 3).toFixed(1) + " GB",
 				usedPercentage: ((totalMem - freeMem) / totalMem * 100).toFixed(1)
 			},
-			temperature: 50,
+			temperature,
 			os: {
-				type: "Windows 11",
+				type: getOsName(),
 				uptime: (os.default.uptime() / 3600).toFixed(1) + "h"
 			}
 		};
@@ -569,12 +625,114 @@ function registerSystemHandlers(ipcMain) {
 	ipcMain.removeHandler("get-drives");
 	ipcMain.handle("get-drives", async () => {
 		try {
-			const output = await runCommand$1(`powershell "Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{N='FreeGB';E={[math]::round($_.Free/1GB, 2)}}, @{N='TotalGB';E={[math]::round(($_.Used + $_.Free)/1GB, 2)}} | ConvertTo-Json"`);
-			return output ? JSON.parse(output) : [];
+			if (os.default.platform() === "win32") {
+				const output = await runCommand$3(`powershell "Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{N='FreeGB';E={[math]::round($_.Free/1GB, 2)}}, @{N='TotalGB';E={[math]::round(($_.Used + $_.Free)/1GB, 2)}} | ConvertTo-Json"`);
+				return output ? JSON.parse(output) : [];
+			}
+			if (os.default.platform() === "linux" || os.default.platform() === "darwin") return await getUnixDrives();
+			return [];
 		} catch (e) {
 			return [];
 		}
 	});
+}
+async function getLinuxInstalledApps() {
+	try {
+		const paths = [
+			"/usr/share/applications",
+			"/usr/local/share/applications",
+			`${os.default.homedir()}/.local/share/applications`,
+			"/var/lib/snapd/desktop/applications",
+			"/var/lib/flatpak/exports/share/applications"
+		];
+		const apps = [];
+		const seen = /* @__PURE__ */ new Set();
+		for (const dir of paths) {
+			if (!fs.default.existsSync(dir)) continue;
+			try {
+				const files = fs.default.readdirSync(dir).filter((f) => f.endsWith(".desktop"));
+				for (const file of files) try {
+					const content = fs.default.readFileSync(`${dir}/${file}`, "utf8");
+					if (content.includes("NoDisplay=true") || content.includes("Hidden=true")) continue;
+					const nameMatch = content.match(/^Name=(.+)$/m);
+					const name = nameMatch ? nameMatch[1].trim() : file.replace(".desktop", "");
+					const id = file.replace(".desktop", "");
+					if (!seen.has(id)) {
+						seen.add(id);
+						apps.push({
+							name,
+							id
+						});
+					}
+				} catch {}
+			} catch {}
+		}
+		return apps.sort((a, b) => a.name.localeCompare(b.name));
+	} catch {
+		return [];
+	}
+}
+async function getMacInstalledApps() {
+	try {
+		const output = await runCommand$3("ls /Applications 2>/dev/null");
+		if (!output) return [];
+		return output.split("\n").filter((f) => f.endsWith(".app")).map((f) => ({
+			name: f.replace(".app", ""),
+			id: `/Applications/${f}`
+		})).sort((a, b) => a.name.localeCompare(b.name));
+	} catch {
+		return [];
+	}
+}
+async function getUnixDrives() {
+	try {
+		const output = await runCommand$3("df -B1 --output=source,size,avail,target 2>/dev/null | tail -n +2");
+		if (!output) return parseDfKilobytes(await runCommand$3("df -k 2>/dev/null | tail -n +2"));
+		const drives = [];
+		const seen = /* @__PURE__ */ new Set();
+		for (const line of output.split("\n")) {
+			const parts = line.trim().split(/\s+/);
+			if (parts.length < 4) continue;
+			const source = parts[0];
+			const totalBytes = parseInt(parts[1]);
+			const freeBytes = parseInt(parts[2]);
+			const mountPoint = parts[3];
+			if (source.startsWith("tmpfs") || source.startsWith("udev") || source.startsWith("devtmpfs") || source.startsWith("overlay") || source.startsWith("squashfs") || mountPoint.startsWith("/snap") || mountPoint.startsWith("/sys") || mountPoint.startsWith("/proc") || mountPoint.startsWith("/dev") || mountPoint.startsWith("/run") || isNaN(totalBytes) || totalBytes === 0) continue;
+			const name = mountPoint === "/" ? "/" : mountPoint.split("/").pop() || mountPoint;
+			if (seen.has(name)) continue;
+			seen.add(name);
+			drives.push({
+				Name: name,
+				FreeGB: parseFloat((freeBytes / 1024 ** 3).toFixed(2)),
+				TotalGB: parseFloat((totalBytes / 1024 ** 3).toFixed(2))
+			});
+		}
+		return drives;
+	} catch {
+		return [];
+	}
+}
+function parseDfKilobytes(output) {
+	const drives = [];
+	const seen = /* @__PURE__ */ new Set();
+	for (const line of output.split("\n")) {
+		const parts = line.trim().split(/\s+/);
+		if (parts.length < 6) continue;
+		const source = parts[0];
+		const totalKB = parseInt(parts[1]);
+		const freeKB = parseInt(parts[3]);
+		const mountPoint = parts[5];
+		if (source.startsWith("tmpfs") || source.startsWith("udev") || source.startsWith("devtmpfs") || mountPoint.startsWith("/snap") || mountPoint.startsWith("/sys") || mountPoint.startsWith("/proc") || mountPoint.startsWith("/dev") || mountPoint.startsWith("/run") || isNaN(totalKB) || totalKB === 0) continue;
+		const name = mountPoint === "/" ? "/" : mountPoint.split("/").pop() || mountPoint;
+		if (seen.has(name)) continue;
+		seen.add(name);
+		drives.push({
+			Name: name,
+			FreeGB: parseFloat((freeKB / 1024 ** 2).toFixed(2)),
+			TotalGB: parseFloat((totalKB / 1024 ** 2).toFixed(2))
+		});
+	}
+	return drives;
 }
 //#endregion
 //#region node_modules/groq-sdk/internal/tslib.mjs
@@ -2322,6 +2480,13 @@ var getSystemPath$1 = (name) => {
 		}
 	}
 };
+var runCommand$2 = (cmd) => {
+	return new Promise((resolve) => {
+		(0, child_process.exec)(cmd, (err, stdout) => {
+			resolve(err ? "" : stdout.trim());
+		});
+	});
+};
 async function getActiveDrives() {
 	if (os.default.platform() === "win32") {
 		const drives = [];
@@ -2336,7 +2501,53 @@ async function getActiveDrives() {
 		}
 		return drives.length > 0 ? drives : ["C:\\"];
 	}
-	return ["/"];
+	if (os.default.platform() === "linux") {
+		const drives = new Set([os.default.homedir()]);
+		try {
+			const home = os.default.homedir();
+			for (const dir of [
+				"Desktop",
+				"Documents",
+				"Downloads",
+				"Music",
+				"Pictures",
+				"Videos"
+			]) {
+				const fullPath = path.default.join(home, dir);
+				if (fs.default.existsSync(fullPath)) drives.add(fullPath);
+			}
+		} catch {}
+		try {
+			const mediaPath = `/media/${os.default.userInfo().username}`;
+			if (fs.default.existsSync(mediaPath)) {
+				const mounts = fs.default.readdirSync(mediaPath);
+				for (const mount of mounts) drives.add(path.default.join(mediaPath, mount));
+			}
+		} catch {}
+		try {
+			if (fs.default.existsSync("/mnt")) {
+				const mounts = fs.default.readdirSync("/mnt");
+				for (const mount of mounts) {
+					const fullPath = path.default.join("/mnt", mount);
+					try {
+						if (fs.default.statSync(fullPath).isDirectory()) drives.add(fullPath);
+					} catch {}
+				}
+			}
+		} catch {}
+		return Array.from(drives);
+	}
+	if (os.default.platform() === "darwin") {
+		const drives = new Set([os.default.homedir()]);
+		try {
+			if (fs.default.existsSync("/Volumes")) {
+				const volumes = fs.default.readdirSync("/Volumes");
+				for (const vol of volumes) drives.add(path.default.join("/Volumes", vol));
+			}
+		} catch {}
+		return Array.from(drives);
+	}
+	return [os.default.homedir()];
 }
 var IGNORE_FOLDERS = new Set([
 	"node_modules",
@@ -2347,7 +2558,23 @@ var IGNORE_FOLDERS = new Set([
 	"dist",
 	"build",
 	".git",
-	"$recycle.bin"
+	"$recycle.bin",
+	".cache",
+	".local",
+	".config",
+	".npm",
+	".yarn",
+	".mozilla",
+	".thunderbird",
+	".gnome",
+	".gradle",
+	".m2",
+	"snap",
+	".snap",
+	".var",
+	".steam",
+	".wine",
+	"lost+found"
 ]);
 function registerFileSearch(ipcMain) {
 	ipcMain.handle("index-folder", async (event, folderPath) => {
@@ -2517,7 +2744,9 @@ function registerFileSearch(ipcMain) {
 				else {
 					searchRoots.add(os.default.homedir());
 					(await getActiveDrives()).forEach((d) => {
-						if (!d.startsWith("C")) searchRoots.add(d);
+						if (os.default.platform() === "win32") {
+							if (!d.startsWith("C")) searchRoots.add(d);
+						} else searchRoots.add(d);
 					});
 				}
 				const rootArray = Array.from(searchRoots);
@@ -2526,6 +2755,13 @@ function registerFileSearch(ipcMain) {
 					text: `Native Sweeping Nested Folders...`,
 					progress: 50
 				});
+				if (os.default.platform() === "linux" || os.default.platform() === "darwin") {
+					const locateResults = await tryLocateCommand(searchParams.keywords);
+					if (locateResults.length > 0) {
+						nativeResultsText = `⚡ NATIVE DEEP SYSTEM MATCHES:\n` + locateResults.slice(0, 15).join("\n");
+						return;
+					}
+				}
 				const foundFiles = [];
 				const queue = [...rootArray];
 				const visited = /* @__PURE__ */ new Set();
@@ -2577,6 +2813,24 @@ function registerFileSearch(ipcMain) {
 			return `❌ System Error: ${String(err)}`;
 		}
 	});
+}
+async function tryLocateCommand(keywords) {
+	try {
+		if (!await runCommand$2("which locate")) return [];
+		const mainKeyword = keywords[0];
+		if (!mainKeyword) return [];
+		const output = await runCommand$2(`locate -i -l 50 "${mainKeyword}" 2>/dev/null`);
+		if (!output) return [];
+		return output.split("\n").filter((line) => {
+			const lowerLine = line.toLowerCase();
+			return keywords.every((kw) => lowerLine.includes(kw));
+		}).filter((line) => {
+			const lower = line.toLowerCase();
+			return ![...IGNORE_FOLDERS].some((ignore) => lower.includes(`/${ignore}/`));
+		}).slice(0, 15);
+	} catch {
+		return [];
+	}
 }
 //#endregion
 //#region src/main/logic/file-ops.ts
@@ -2709,7 +2963,11 @@ var getFileType = (name, isDirectory) => {
 		".bat",
 		".sh",
 		".app",
-		".dmg"
+		".dmg",
+		".deb",
+		".rpm",
+		".appimage",
+		".run"
 	];
 	if (textExts.includes(ext)) return "text";
 	if (imgExts.includes(ext)) return "image";
@@ -2806,7 +3064,7 @@ function registerDirLoader(ipcMain) {
 }
 //#endregion
 //#region src/main/logic/file-launcher.ts
-var runCommand = (cmd) => {
+var runCommand$1 = (cmd) => {
 	return new Promise((resolve) => {
 		(0, child_process.exec)(cmd, (err, stdout) => {
 			resolve(err ? "" : stdout.trim());
@@ -2818,114 +3076,452 @@ function registerFileScanner(ipcMain) {
 	ipcMain.handle("get-running-apps", async () => {
 		try {
 			if (os.default.platform() === "win32") {
-				const apps = (await runCommand(`powershell "Get-Process | Where-Object {$_.MainWindowTitle -ne ''} | Select-Object -ExpandProperty ProcessName"`)).split(/\r?\n/).map((a) => a.trim()).filter((a) => a);
+				const apps = (await runCommand$1(`powershell "Get-Process | Where-Object {$_.MainWindowTitle -ne ''} | Select-Object -ExpandProperty ProcessName"`)).split(/\r?\n/).map((a) => a.trim()).filter((a) => a);
 				return [...new Set(apps)];
 			}
-			if (os.default.platform() === "darwin") return (await runCommand(`osascript -e 'tell application "System Events" to get name of (processes where background only is false)'`)).split(", ").map((s) => s.trim());
+			if (os.default.platform() === "darwin") return (await runCommand$1(`osascript -e 'tell application "System Events" to get name of (processes where background only is false)'`)).split(", ").map((s) => s.trim());
+			if (os.default.platform() === "linux") return await getLinuxRunningApps();
 			return [];
 		} catch (e) {
 			return [];
 		}
 	});
 }
+async function getLinuxRunningApps() {
+	const wmctrlApps = await tryWmctrl();
+	if (wmctrlApps.length > 0) return wmctrlApps;
+	const xdotoolApps = await tryXdotool();
+	if (xdotoolApps.length > 0) return xdotoolApps;
+	return await tryPsFilter();
+}
+async function tryWmctrl() {
+	const output = await runCommand$1(`wmctrl -lx 2>/dev/null`);
+	if (!output) return [];
+	const apps = output.split("\n").map((line) => {
+		const parts = line.trim().split(/\s+/);
+		if (parts.length < 3) return "";
+		const wmClass = parts[2];
+		return (wmClass.includes(".") ? wmClass.split(".").pop() || wmClass : wmClass).replace(/-/g, " ").trim();
+	}).filter(Boolean);
+	return [...new Set(apps)];
+}
+async function tryXdotool() {
+	const idsOutput = await runCommand$1(`xdotool search --onlyvisible --name "" 2>/dev/null`);
+	if (!idsOutput) return [];
+	const windowIds = idsOutput.split("\n").filter(Boolean);
+	const apps = /* @__PURE__ */ new Set();
+	for (const id of windowIds.slice(0, 50)) {
+		const className = await runCommand$1(`xdotool getwindowclassname ${id} 2>/dev/null`);
+		if (className) apps.add(className.trim());
+	}
+	return Array.from(apps);
+}
+async function tryPsFilter() {
+	const output = await runCommand$1(`ps -eo comm --no-headers | sort -u`);
+	if (!output) return [];
+	const systemPrefixes = [
+		"systemd",
+		"kworker",
+		"ksoftirqd",
+		"migration",
+		"rcu_",
+		"kthread",
+		"watchdog",
+		"dbus",
+		"gvfsd",
+		"pulseaudio",
+		"pipewire",
+		"NetworkManager",
+		"wpa_supplicant",
+		"polkitd",
+		"gnome-keyring",
+		"at-spi",
+		"goa-",
+		"evolution-",
+		"tracker",
+		"gjs",
+		"gsd-",
+		"ibus-",
+		"fwupd",
+		"colord",
+		"rtkit",
+		"snapd",
+		"snap-",
+		"cups",
+		"avahi",
+		"cron",
+		"rsyslog"
+	];
+	const apps = output.split("\n").map((s) => s.trim()).filter((name) => {
+		if (!name) return false;
+		return !systemPrefixes.some((prefix) => name.startsWith(prefix));
+	});
+	return [...new Set(apps)];
+}
 //#endregion
 //#region src/main/logic/app-launcher.ts
 var PROTECTED_PROCESSES = [
-	"explorer.exe",
-	"dwm.exe",
-	"svchost.exe",
-	"lsass.exe",
-	"csrss.exe",
-	"wininit.exe",
-	"winlogon.exe",
-	"services.exe",
-	"taskmgr.exe",
-	"system",
-	"registry"
+	"systemd",
+	"init",
+	"kthreadd",
+	"kworker",
+	"ksoftirqd",
+	"migration",
+	"rcu_",
+	"watchdog",
+	"gnome-shell",
+	"gnome-session",
+	"Xorg",
+	"Xwayland",
+	"wayland",
+	"pulseaudio",
+	"pipewire",
+	"pipewire-pulse",
+	"dbus-daemon",
+	"dbus-broker",
+	"NetworkManager",
+	"systemd-logind",
+	"systemd-udevd",
+	"systemd-journal",
+	"snapd",
+	"polkitd",
+	"gdm",
+	"gdm3",
+	"lightdm",
+	"sddm",
+	"kernel",
+	"modprobe",
+	"plasmashell",
+	"kwin",
+	"mutter"
 ];
 var APP_ALIASES = {
 	vscode: "code",
 	code: "code",
+	"vs code": "code",
 	"visual studio code": "code",
-	terminal: "wt",
-	cmd: "start cmd",
-	git: "start git-bash",
-	mongo: "mongodbcompass",
-	mongodb: "mongodbcompass",
+	"visual studio": "code",
+	sublime: "subl",
+	"sublime text": "subl",
+	atom: "atom",
+	vim: "gnome-terminal -- vim",
+	nvim: "gnome-terminal -- nvim",
+	neovim: "gnome-terminal -- nvim",
+	nano: "gnome-terminal -- nano",
+	emacs: "emacs",
+	intellij: "intellij-idea-community",
+	pycharm: "pycharm-community",
+	webstorm: "webstorm",
+	android: "android-studio",
+	"android studio": "android-studio",
+	eclipse: "eclipse",
+	netbeans: "netbeans",
+	terminal: "gnome-terminal",
+	"gnome terminal": "gnome-terminal",
+	konsole: "konsole",
+	xterm: "xterm",
+	tilix: "tilix",
+	terminator: "terminator",
+	alacritty: "alacritty",
+	kitty: "kitty",
+	warp: "warp-terminal",
+	cmd: "gnome-terminal",
+	bash: "gnome-terminal",
+	shell: "gnome-terminal",
+	zsh: "gnome-terminal -- zsh",
+	fish: "gnome-terminal -- fish",
+	chrome: "google-chrome",
+	"google chrome": "google-chrome",
+	chromium: "chromium-browser",
+	edge: "microsoft-edge",
+	"microsoft edge": "microsoft-edge",
+	brave: "brave-browser",
+	"brave browser": "brave-browser",
+	firefox: "firefox",
+	"mozilla firefox": "firefox",
+	opera: "opera",
+	vivaldi: "vivaldi",
+	tor: "torbrowser-launcher",
+	"tor browser": "torbrowser-launcher",
+	whatsapp: "whatsdesk",
+	"whatsapp desktop": "whatsdesk",
+	discord: "discord",
+	slack: "slack",
+	telegram: "telegram-desktop",
+	"telegram desktop": "telegram-desktop",
+	signal: "signal-desktop",
+	zoom: "zoom",
+	skype: "skype",
+	teams: "teams",
+	"microsoft teams": "teams",
+	element: "element-desktop",
+	matrix: "element-desktop",
+	thunderbird: "thunderbird",
+	evolution: "evolution",
+	mail: "evolution",
+	spotify: "spotify",
+	vlc: "vlc",
+	"vlc media player": "vlc",
+	"media player": "vlc",
+	mpv: "mpv",
+	rhythmbox: "rhythmbox",
+	music: "rhythmbox",
+	audacity: "audacity",
+	obs: "obs",
+	"obs studio": "obs",
+	kdenlive: "kdenlive",
+	shotcut: "shotcut",
+	blender: "blender",
+	gimp: "gimp",
+	inkscape: "inkscape",
+	krita: "krita",
+	photos: "eog",
+	"image viewer": "eog",
+	eog: "eog",
+	gthumb: "gthumb",
+	shotwell: "shotwell",
+	darktable: "darktable",
+	steam: "steam",
+	lutris: "lutris",
+	heroic: "heroic",
+	"epic games": "heroic",
+	minecraft: "minecraft-launcher",
+	"minecraft launcher": "minecraft-launcher",
+	tlauncher: "tlauncher",
+	retroarch: "retroarch",
+	dolphin: "dolphin-emu",
+	pcsx2: "pcsx2",
+	notepad: "gedit",
+	gedit: "gedit",
+	"text editor": "gedit",
+	kate: "kate",
+	mousepad: "mousepad",
+	calculator: "gnome-calculator",
+	calc: "gnome-calculator",
+	settings: "gnome-control-center",
+	"system settings": "gnome-control-center",
+	preferences: "gnome-control-center",
+	explorer: "nautilus",
+	files: "nautilus",
+	nautilus: "nautilus",
+	"file manager": "nautilus",
+	"file explorer": "nautilus",
+	thunar: "thunar",
+	dolphin_files: "dolphin",
+	"task manager": "gnome-system-monitor",
+	"system monitor": "gnome-system-monitor",
+	htop: "gnome-terminal -- htop",
+	btop: "gnome-terminal -- btop",
+	camera: "cheese",
+	cheese: "cheese",
+	weather: "gnome-weather",
+	clock: "gnome-clocks",
+	maps: "gnome-maps",
+	contacts: "gnome-contacts",
+	calendar: "gnome-calendar",
+	libreoffice: "libreoffice",
+	writer: "libreoffice --writer",
+	word: "libreoffice --writer",
+	calc_office: "libreoffice --calc",
+	excel: "libreoffice --calc",
+	impress: "libreoffice --impress",
+	powerpoint: "libreoffice --impress",
+	onlyoffice: "desktopeditors",
+	okular: "okular",
+	pdf: "evince",
+	evince: "evince",
 	postman: "postman",
-	chrome: "start chrome",
-	"google chrome": "start chrome",
-	edge: "start msedge",
-	brave: "start brave",
-	firefox: "start firefox",
-	whatsapp: "start whatsapp:",
-	discord: "Update.exe --processStart Discord.exe",
-	spotify: "start spotify:",
-	telegram: "start telegram:",
-	tlauncher: "TLauncher",
-	minecraft: "MinecraftLauncher",
-	"cheat engine": "Cheat Engine",
-	steam: "start steam:",
-	"epic games": "com.epicgames.launcher:",
-	"live wallpaper": "livelywpf",
-	lively: "livelywpf",
-	notepad: "notepad",
-	calculator: "calc",
-	settings: "start ms-settings:",
-	explorer: "explorer",
-	files: "explorer",
-	"task manager": "taskmgr",
-	camera: "start microsoft.windows.camera:",
-	photos: "start microsoft.windows.photos:"
+	insomnia: "insomnia",
+	filezilla: "filezilla",
+	transmission: "transmission-gtk",
+	torrent: "transmission-gtk",
+	qbittorrent: "qbittorrent",
+	wireshark: "wireshark",
+	virtualbox: "virtualbox",
+	vmware: "vmware",
+	docker: "docker-desktop",
+	mongo: "mongodb-compass",
+	mongodb: "mongodb-compass",
+	"mongodb compass": "mongodb-compass",
+	mysql: "mysql-workbench",
+	"mysql workbench": "mysql-workbench",
+	dbeaver: "dbeaver",
+	redis: "redis-desktop-manager",
+	figma: "figma-linux",
+	xd: "xd",
+	"adobe xd": "xd",
+	calibre: "calibre",
+	ebook: "calibre",
+	foliate: "foliate",
+	keepassxc: "keepassxc",
+	bitwarden: "bitwarden",
+	"1password": "1password",
+	veracrypt: "veracrypt",
+	store: "gnome-software",
+	"software center": "gnome-software",
+	"gnome software": "gnome-software",
+	snap: "snap-store"
+};
+var WEB_FALLBACKS = {
+	whatsapp: "https://web.whatsapp.com",
+	"whatsapp web": "https://web.whatsapp.com",
+	telegram: "https://web.telegram.org",
+	"telegram web": "https://web.telegram.org",
+	discord: "https://discord.com/app",
+	slack: "https://app.slack.com",
+	messenger: "https://www.messenger.com",
+	facebook: "https://www.facebook.com",
+	instagram: "https://www.instagram.com",
+	twitter: "https://twitter.com",
+	x: "https://x.com",
+	youtube: "https://www.youtube.com",
+	gmail: "https://mail.google.com",
+	outlook: "https://outlook.live.com",
+	email: "https://mail.google.com",
+	netflix: "https://www.netflix.com",
+	prime: "https://www.primevideo.com",
+	"prime video": "https://www.primevideo.com",
+	hotstar: "https://www.hotstar.com",
+	disney: "https://www.disneyplus.com",
+	"disney plus": "https://www.disneyplus.com",
+	spotify: "https://open.spotify.com",
+	"spotify web": "https://open.spotify.com",
+	"apple music": "https://music.apple.com",
+	soundcloud: "https://soundcloud.com",
+	github: "https://github.com",
+	gitlab: "https://gitlab.com",
+	bitbucket: "https://bitbucket.org",
+	stackoverflow: "https://stackoverflow.com",
+	reddit: "https://www.reddit.com",
+	twitch: "https://www.twitch.tv",
+	linkedin: "https://www.linkedin.com",
+	zoom: "https://zoom.us/join",
+	meet: "https://meet.google.com",
+	"google meet": "https://meet.google.com",
+	teams: "https://teams.microsoft.com",
+	"google docs": "https://docs.google.com",
+	docs: "https://docs.google.com",
+	"google drive": "https://drive.google.com",
+	drive: "https://drive.google.com",
+	dropbox: "https://www.dropbox.com",
+	onedrive: "https://onedrive.live.com",
+	notion: "https://www.notion.so",
+	trello: "https://trello.com",
+	asana: "https://app.asana.com",
+	jira: "https://www.atlassian.com/software/jira",
+	figma: "https://www.figma.com",
+	canva: "https://www.canva.com",
+	chatgpt: "https://chat.openai.com",
+	gpt: "https://chat.openai.com",
+	claude: "https://claude.ai",
+	gemini: "https://gemini.google.com",
+	bard: "https://gemini.google.com",
+	copilot: "https://copilot.microsoft.com",
+	perplexity: "https://www.perplexity.ai",
+	amazon: "https://www.amazon.com",
+	flipkart: "https://www.flipkart.com",
+	ebay: "https://www.ebay.com",
+	paypal: "https://www.paypal.com",
+	"google maps": "https://maps.google.com",
+	maps: "https://maps.google.com",
+	translate: "https://translate.google.com",
+	"google translate": "https://translate.google.com",
+	weather: "https://weather.com",
+	wikipedia: "https://www.wikipedia.org",
+	wiki: "https://www.wikipedia.org"
 };
 var PROCESS_NAMES = {
-	vscode: "code.exe",
-	code: "code.exe",
-	"visual studio code": "code.exe",
-	chrome: "chrome.exe",
-	"google chrome": "chrome.exe",
-	edge: "msedge.exe",
-	brave: "brave.exe",
-	firefox: "firefox.exe",
-	notepad: "notepad.exe",
-	cmd: "cmd.exe",
-	terminal: "WindowsTerminal.exe",
-	whatsapp: "WhatsApp.exe",
-	discord: "Discord.exe",
-	spotify: "Spotify.exe",
-	telegram: "Telegram.exe",
-	steam: "steam.exe",
-	"epic games": "EpicGamesLauncher.exe",
-	camera: "WindowsCamera.exe",
-	calculator: "CalculatorApp.exe",
-	settings: "SystemSettings.exe",
-	"task manager": "Taskmgr.exe",
-	photos: "Microsoft.Photos.exe",
-	explorer: "explorer.exe",
-	files: "explorer.exe"
+	vscode: "code",
+	code: "code",
+	"visual studio code": "code",
+	sublime: "sublime_text",
+	atom: "atom",
+	intellij: "idea",
+	pycharm: "pycharm",
+	terminal: "gnome-terminal",
+	konsole: "konsole",
+	tilix: "tilix",
+	chrome: "chrome",
+	"google chrome": "chrome",
+	chromium: "chromium",
+	edge: "msedge",
+	brave: "brave",
+	firefox: "firefox",
+	opera: "opera",
+	vivaldi: "vivaldi",
+	whatsapp: "whatsdesk",
+	discord: "Discord",
+	slack: "slack",
+	telegram: "telegram-desktop",
+	signal: "signal-desktop",
+	zoom: "zoom",
+	skype: "skype",
+	teams: "teams",
+	spotify: "spotify",
+	vlc: "vlc",
+	mpv: "mpv",
+	rhythmbox: "rhythmbox",
+	audacity: "audacity",
+	obs: "obs",
+	blender: "blender",
+	gimp: "gimp",
+	inkscape: "inkscape",
+	krita: "krita",
+	photos: "eog",
+	steam: "steam",
+	lutris: "lutris",
+	minecraft: "minecraft-launcher",
+	notepad: "gedit",
+	gedit: "gedit",
+	calculator: "gnome-calculator",
+	settings: "gnome-control-center",
+	files: "nautilus",
+	explorer: "nautilus",
+	nautilus: "nautilus",
+	"task manager": "gnome-system-monitor",
+	camera: "cheese",
+	libreoffice: "soffice",
+	writer: "soffice",
+	okular: "okular",
+	evince: "evince",
+	pdf: "evince",
+	postman: "postman",
+	filezilla: "filezilla",
+	qbittorrent: "qbittorrent",
+	virtualbox: "VirtualBox",
+	figma: "figma-linux",
+	calibre: "calibre",
+	keepassxc: "keepassxc",
+	bitwarden: "bitwarden"
 };
 function registerAppLauncher(ipcMain) {
 	ipcMain.removeHandler("open-app");
 	ipcMain.handle("open-app", async (_event, appName) => {
 		return new Promise((resolve) => {
-			let command = APP_ALIASES[appName.toLowerCase().trim()];
-			if (command) executeCommand(command, appName, resolve);
-			else launchViaPowerShell(appName, resolve);
+			const lowerName = appName.toLowerCase().trim();
+			const command = APP_ALIASES[lowerName];
+			if (command) {
+				const binaryName = command.split(" ")[0];
+				checkIfInstalled(binaryName, (installed) => {
+					if (installed) executeCommand(command, appName, resolve);
+					else tryWebFallback(lowerName, appName, resolve);
+				});
+			} else launchViaDesktop(appName, resolve, lowerName);
 		});
 	});
 	ipcMain.removeHandler("close-app");
 	ipcMain.handle("close-app", async (_event, appName) => {
 		return new Promise((resolve) => {
 			let processName = PROCESS_NAMES[appName.toLowerCase().trim()];
-			if (!processName) processName = appName.endsWith(".exe") ? appName : `${appName}.exe`;
-			if (PROTECTED_PROCESSES.includes(processName.toLowerCase())) {
+			if (!processName) processName = appName.toLowerCase();
+			if (PROTECTED_PROCESSES.some((p) => processName.toLowerCase().includes(p.toLowerCase()))) {
 				resolve({
 					success: false,
-					error: `Security Protocol: I cannot close '${appName}' (System Critical Process). Doing so would crash your PC.`
+					error: `Security Protocol: I cannot close '${appName}' (System Critical Process). Doing so would crash your system.`
 				});
 				return;
 			}
-			(0, child_process.exec)(`taskkill /IM "${processName}" /F /T`, (error) => {
+			(0, child_process.exec)(`pkill -f "${processName}"`, (error) => {
 				if (error) resolve({
 					success: false,
 					error: `Could not close ${appName}. Is it running?`
@@ -2937,41 +3533,167 @@ function registerAppLauncher(ipcMain) {
 			});
 		});
 	});
+	ipcMain.removeHandler("list-installed-apps");
+	ipcMain.handle("list-installed-apps", async () => {
+		return new Promise((resolve) => {
+			(0, child_process.exec)(`ls /usr/share/applications/ ~/.local/share/applications/ /var/lib/snapd/desktop/applications/ 2>/dev/null | grep .desktop | sort -u`, (error, stdout) => {
+				if (error) resolve({
+					success: false,
+					apps: []
+				});
+				else resolve({
+					success: true,
+					apps: stdout.split("\n").filter(Boolean).map((f) => f.replace(".desktop", ""))
+				});
+			});
+		});
+	});
+	ipcMain.removeHandler("open-url");
+	ipcMain.handle("open-url", async (_event, url) => {
+		return new Promise((resolve) => {
+			if (!url.startsWith("http://") && !url.startsWith("https://")) url = `https://${url}`;
+			(0, child_process.exec)(`xdg-open "${url}"`, (error) => {
+				if (error) resolve({
+					success: false,
+					error: error.message
+				});
+				else resolve({
+					success: true,
+					message: `Opened ${url}`
+				});
+			});
+		});
+	});
+}
+function checkIfInstalled(binary, callback) {
+	(0, child_process.exec)(`which ${binary}`, (error, stdout) => {
+		callback(!error && !!stdout.trim());
+	});
 }
 function executeCommand(command, appName, resolve) {
-	(0, child_process.exec)(command, (error) => {
-		if (error) launchViaPowerShell(appName, resolve);
+	(0, child_process.exec)(`${command} > /dev/null 2>&1 &`, (error) => {
+		if (error) launchViaDesktop(appName, resolve, appName.toLowerCase().trim());
 		else resolve({
 			success: true,
 			message: `Opened ${appName}`
 		});
 	});
 }
-function launchViaPowerShell(appName, resolve) {
-	(0, child_process.exec)(`powershell -Command "Get-StartApps | Where-Object { $_.Name -like '*${appName}*' } | Select-Object -First 1 -ExpandProperty AppID"`, (error, stdout) => {
-		if (error) {
-			resolve({
-				success: false,
-				error: `Could not find '${appName}' on this system. Try opening it manually once.`
-			});
+function launchViaDesktop(appName, resolve, lowerName) {
+	(0, child_process.exec)(`ls ${[
+		"/usr/share/applications/",
+		`${process.env.HOME}/.local/share/applications/`,
+		"/var/lib/snapd/desktop/applications/",
+		"/var/lib/flatpak/exports/share/applications/"
+	].join(" ")} 2>/dev/null | grep -i "${appName}" | head -1`, (error, stdout) => {
+		if (error || !stdout.trim()) {
+			tryDirectBinary(appName, resolve, lowerName);
 			return;
 		}
-		const appId = stdout.trim();
-		if (appId) (0, child_process.exec)(`start explorer "shell:AppsFolder\\${appId}"`, (launchErr) => {
-			if (launchErr) resolve({
-				success: false,
-				error: `Found app but could not launch: ${launchErr.message}`
-			});
+		(0, child_process.exec)(`gtk-launch "${stdout.trim().replace(".desktop", "")}"`, (launchErr) => {
+			if (launchErr) tryDirectBinary(appName, resolve, lowerName);
 			else resolve({
 				success: true,
 				message: `Opened ${appName} via System Search`
 			});
 		});
-		else resolve({
-			success: false,
-			error: `Could not find '${appName}' on this system. Try opening it manually once.`
+	});
+}
+function tryDirectBinary(appName, resolve, lowerName) {
+	const cleanName = appName.toLowerCase().replace(/\s+/g, "-");
+	(0, child_process.exec)(`which ${cleanName}`, (error, stdout) => {
+		if (error || !stdout.trim()) {
+			trySnap(appName, resolve, lowerName);
+			return;
+		}
+		(0, child_process.exec)(`${cleanName} > /dev/null 2>&1 &`, (launchErr) => {
+			if (launchErr) trySnap(appName, resolve, lowerName);
+			else resolve({
+				success: true,
+				message: `Opened ${appName}`
+			});
 		});
 	});
+}
+function trySnap(appName, resolve, lowerName) {
+	(0, child_process.exec)(`snap run ${appName.toLowerCase().replace(/\s+/g, "-")} > /dev/null 2>&1 &`, (snapErr) => {
+		if (!snapErr) resolve({
+			success: true,
+			message: `Opened ${appName} (snap)`
+		});
+		else tryFlatpak(appName, resolve, lowerName);
+	});
+}
+function tryFlatpak(appName, resolve, lowerName) {
+	(0, child_process.exec)(`flatpak list --app --columns=application | grep -i "${appName}" | head -1`, (err, stdout) => {
+		const flatpakId = stdout.trim();
+		if (!err && flatpakId) (0, child_process.exec)(`flatpak run ${flatpakId} > /dev/null 2>&1 &`, (runErr) => {
+			if (!runErr) resolve({
+				success: true,
+				message: `Opened ${appName} (flatpak)`
+			});
+			else tryWebFallback(lowerName, appName, resolve);
+		});
+		else tryWebFallback(lowerName, appName, resolve);
+	});
+}
+function tryWebFallback(lowerName, appName, resolve) {
+	const webUrl = WEB_FALLBACKS[lowerName];
+	if (webUrl) (0, child_process.exec)(`xdg-open "${webUrl}"`, (error) => {
+		if (error) openInBrowser(webUrl, appName, resolve);
+		else resolve({
+			success: true,
+			message: `${appName} not installed natively → Opened web version in browser 🌐`,
+			fallback: "web",
+			url: webUrl
+		});
+	});
+	else (0, child_process.exec)(`xdg-open "${`https://www.google.com/search?q=${encodeURIComponent(appName)}`}"`, (error) => {
+		if (error) resolve({
+			success: false,
+			error: `Could not find '${appName}' on this system. Not installed and no web version available. Try installing it via: sudo apt install ${appName.toLowerCase().replace(/\s+/g, "-")}`
+		});
+		else resolve({
+			success: true,
+			message: `'${appName}' not found → Opened Google search 🔍`,
+			fallback: "search"
+		});
+	});
+}
+function openInBrowser(url, appName, resolve) {
+	const browsers = [
+		"google-chrome",
+		"chromium-browser",
+		"chromium",
+		"firefox",
+		"brave-browser",
+		"microsoft-edge",
+		"opera",
+		"vivaldi"
+	];
+	function tryNext(index) {
+		if (index >= browsers.length) {
+			resolve({
+				success: false,
+				error: `Could not open ${appName} - no browser installed. Install Firefox/Chrome first.`
+			});
+			return;
+		}
+		const browser = browsers[index];
+		(0, child_process.exec)(`which ${browser}`, (err, stdout) => {
+			if (!err && stdout.trim()) (0, child_process.exec)(`${browser} "${url}" > /dev/null 2>&1 &`, (launchErr) => {
+				if (!launchErr) resolve({
+					success: true,
+					message: `Opened ${appName} web version in ${browser} 🌐`,
+					fallback: "web",
+					browser
+				});
+				else tryNext(index + 1);
+			});
+			else tryNext(index + 1);
+		});
+	}
+	tryNext(0);
 }
 //#endregion
 //#region src/main/logic/notes-manager.ts
@@ -42793,8 +43515,60 @@ function generateHumanPath$1(start, end) {
 	}
 	return pathArray;
 }
+async function setLinuxVolume(level) {
+	return new Promise((resolve) => {
+		(0, child_process.exec)("which pactl", (err) => {
+			if (!err) (0, child_process.exec)(`pactl set-sink-volume @DEFAULT_SINK@ ${level}%`, (pactlErr) => {
+				if (!pactlErr) {
+					resolve(true);
+					return;
+				}
+				tryAmixer();
+			});
+			else tryAmixer();
+		});
+		function tryAmixer() {
+			(0, child_process.exec)("which amixer", (err) => {
+				if (!err) (0, child_process.exec)(`amixer -D pulse sset Master ${level}%`, (amixerErr) => {
+					if (!amixerErr) resolve(true);
+					else (0, child_process.exec)(`amixer sset Master ${level}%`, (fallbackErr) => {
+						resolve(!fallbackErr);
+					});
+				});
+				else resolve(false);
+			});
+		}
+	});
+}
+async function copyFileToClipboardLinux(filePath) {
+	return new Promise((resolve) => {
+		(0, child_process.exec)("which xclip", (xclipErr) => {
+			if (!xclipErr) {
+				(0, child_process.exec)(`echo -n "file://${filePath}" | xclip -selection clipboard -t text/uri-list`, (err) => {
+					resolve(!err);
+				});
+				return;
+			}
+			(0, child_process.exec)("which wl-copy", (wlErr) => {
+				if (!wlErr) (0, child_process.exec)(`echo -n "file://${filePath}" | wl-copy -t text/uri-list`, (err) => {
+					resolve(!err);
+				});
+				else resolve(false);
+			});
+		});
+	});
+}
+async function copyFileToClipboardMac(filePath) {
+	return new Promise((resolve) => {
+		(0, child_process.exec)(`osascript -e 'set the clipboard to (POSIX file "${filePath}")'`, (err) => {
+			resolve(!err);
+		});
+	});
+}
 function registerGhostControl(ipcMain) {
 	ipcMain.handle("copy-file-to-clipboard", async (_event, filePath) => {
+		if (os.default.platform() === "linux") return await copyFileToClipboardLinux(filePath);
+		if (os.default.platform() === "darwin") return await copyFileToClipboardMac(filePath);
 		return new Promise((resolve) => {
 			(0, child_process.exec)(`powershell -command "Set-Clipboard -Path '${filePath}'"`, (error) => {
 				if (error) resolve(false);
@@ -42862,6 +43636,7 @@ function registerGhostControl(ipcMain) {
 	});
 	ipcMain.handle("set-volume", async (_event, level) => {
 		try {
+			if (os.default.platform() === "linux") return await setLinuxVolume(level) ? `Volume ${level}%` : "Error";
 			await loudness.default.setVolume(level);
 			return `Volume ${level}%`;
 		} catch (e) {
@@ -42892,13 +43667,30 @@ function registerSystemControl(ipcMain) {
 		return new Promise((resolve) => {
 			const safeCwd = cwd ? sanitizePath(cwd) : void 0;
 			const win = electron.BrowserWindow.getAllWindows()[0];
-			const child = (0, child_process.spawn)("powershell.exe", ["-Command", command], {
+			let shellPath;
+			let shellArgs;
+			if (os.default.platform() === "win32") {
+				shellPath = "powershell.exe";
+				shellArgs = ["-Command", command];
+			} else if (os.default.platform() === "darwin") {
+				shellPath = "/bin/zsh";
+				shellArgs = ["-c", command];
+			} else {
+				shellPath = "/bin/bash";
+				shellArgs = ["-c", command];
+			}
+			const child = (0, child_process.spawn)(shellPath, shellArgs, {
 				cwd: safeCwd,
 				stdio: [
 					"ignore",
 					"pipe",
 					"pipe"
-				]
+				],
+				env: {
+					...process.env,
+					TERM: "xterm-256color",
+					FORCE_COLOR: "1"
+				}
 			});
 			child.stdout.on("data", (data) => {
 				const output = data.toString();
@@ -42986,7 +43778,7 @@ function registerGalleryHandlers(ipcMain) {
 	ipcMain.handle("save-image-external", async (_event, sourcePath) => {
 		try {
 			const { dialog } = require("electron");
-			const fs$30 = require("fs");
+			const fs$31 = require("fs");
 			const { filePath } = await dialog.showSaveDialog({
 				title: "Save Image Copy",
 				defaultPath: path.default.basename(sourcePath),
@@ -42996,7 +43788,7 @@ function registerGalleryHandlers(ipcMain) {
 				}]
 			});
 			if (filePath) {
-				fs$30.copyFileSync(sourcePath, filePath);
+				fs$31.copyFileSync(sourcePath, filePath);
 				return { success: true };
 			}
 			return { canceled: true };
@@ -47880,7 +48672,7 @@ var require_util = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.isValidFile = isValidFile;
 	exports.getWellKnownCertificateConfigFileLocation = getWellKnownCertificateConfigFileLocation;
 	var fs$18 = require("fs");
-	var os$3 = require("os");
+	var os$5 = require("os");
 	var path$16 = require("path");
 	var WELL_KNOWN_CERTIFICATE_CONFIG_FILE = "certificate_config.json";
 	var CLOUDSDK_CONFIG_DIRECTORY = "gcloud";
@@ -48019,7 +48811,7 @@ var require_util = /* @__PURE__ */ __commonJSMin(((exports) => {
 	* @internal
 	*/
 	function _isWindows() {
-		return os$3.platform().startsWith("win");
+		return os$5.platform().startsWith("win");
 	}
 }));
 //#endregion
@@ -52716,7 +53508,7 @@ var require_googleauth = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var fs$13 = require("fs");
 	var gaxios_1 = require_src$5();
 	var gcpMetadata = require_src$3();
-	var os$2 = require("os");
+	var os$4 = require("os");
 	var path$14 = require("path");
 	var crypto_1 = require_crypto();
 	var computeclient_1 = require_computeclient();
@@ -53143,7 +53935,7 @@ var require_googleauth = /* @__PURE__ */ __commonJSMin(((exports) => {
 		* @api private
 		*/
 		_isWindows() {
-			const sys = os$2.platform();
+			const sys = os$4.platform();
 			if (sys && sys.length >= 3) {
 				if (sys.substring(0, 3).toLowerCase() === "win") return true;
 			}
@@ -53879,7 +54671,7 @@ var __vite_optional_peer_dep_bufferutil_ws_exports = /* @__PURE__ */ __exportAll
 var __vite_optional_peer_dep_bufferutil_ws_default;
 var init___vite_optional_peer_dep_bufferutil_ws = __esmMin((() => {
 	__vite_optional_peer_dep_bufferutil_ws_default = {};
-	throw new Error(`Could not resolve "bufferutil" imported by "ws". Is it installed?`);
+	throw new Error(`Could not resolve "bufferutil" imported by "ws".`);
 }));
 //#endregion
 //#region node_modules/ws/lib/buffer-util.js
@@ -54371,7 +55163,7 @@ var __vite_optional_peer_dep_utf_8_validate_ws_exports = /* @__PURE__ */ __expor
 var __vite_optional_peer_dep_utf_8_validate_ws_default;
 var init___vite_optional_peer_dep_utf_8_validate_ws = __esmMin((() => {
 	__vite_optional_peer_dep_utf_8_validate_ws_default = {};
-	throw new Error(`Could not resolve "utf-8-validate" imported by "ws". Is it installed?`);
+	throw new Error(`Could not resolve "utf-8-validate" imported by "ws".`);
 }));
 //#endregion
 //#region node_modules/ws/lib/validation.js
@@ -72825,1410 +73617,6 @@ function getApiKeyFromEnv() {
 	return envGoogleApiKey || envGeminiApiKey || void 0;
 }
 //#endregion
-//#region src/main/services/iris-coder.ts
-function registerIrisCoder({ ipcMain, app }) {
-	const PROJECTS_DIR = path.default.resolve(app.getPath("userData"), "Projects");
-	if (!fs.default.existsSync(PROJECTS_DIR)) fs.default.mkdirSync(PROJECTS_DIR, { recursive: true });
-	ipcMain.handle("start-live-coding", async (event, { prompt, filename, geminiKey }) => {
-		try {
-			const filePath = path.default.join(PROJECTS_DIR, filename);
-			fs.default.writeFileSync(filePath, "// Boss, connection established. Waiting for AI stream...\n");
-			if (!geminiKey || geminiKey.trim() === "") throw new Error("Missing Gemini API Key. Please configure it in the Command Center Vault.");
-			const response = await new GoogleGenAI({ apiKey: geminiKey }).models.generateContentStream({
-				model: "gemini-3-flash-preview",
-				contents: `You are an elite developer. Write the code for: "${prompt}". Output ONLY the raw code for the file ${filename}. Do NOT wrap it in markdown blockquotes.`
-			});
-			let fullCode = "";
-			for await (const chunk of response) if (chunk.text) {
-				fullCode += chunk.text;
-				event.sender.send("live-code-chunk", chunk.text);
-			}
-			fs.default.writeFileSync(filePath, fullCode);
-			return {
-				success: true,
-				filePath
-			};
-		} catch (err) {
-			event.sender.send("live-code-chunk", `\n\n❌ [SYSTEM FAILURE]: ${String(err)}`);
-			return {
-				success: false,
-				error: String(err)
-			};
-		}
-	});
-	ipcMain.handle("open-in-vscode", async (_event, filePath) => {
-		try {
-			(0, child_process.exec)(`code "${filePath}"`);
-			return { success: true };
-		} catch (err) {
-			return {
-				success: false,
-				error: String(err)
-			};
-		}
-	});
-}
-//#endregion
-//#region src/main/logic/telekinesis.ts
-function registerTelekinesis({ ipcMain }) {
-	ipcMain.handle("teleport-windows", async (_event, commands) => {
-		try {
-			node_window_manager.windowManager.requestAccessibility();
-			const { width, height, x: screenX, y: screenY } = electron.screen.getPrimaryDisplay().workArea;
-			const openWindows = node_window_manager.windowManager.getWindows();
-			for (const cmd of commands) {
-				const targetWindow = openWindows.filter((w) => w.isWindow() && w.isVisible() && w.getTitle() !== "" && (w.getTitle().toLowerCase().includes(cmd.appName.toLowerCase()) || w.path.toLowerCase().includes(cmd.appName.toLowerCase())))[0];
-				if (targetWindow) {
-					targetWindow.restore();
-					targetWindow.bringToTop();
-					const halfW = Math.floor(width / 2);
-					const halfH = Math.floor(height / 2);
-					let newBounds = {
-						x: screenX,
-						y: screenY,
-						width,
-						height
-					};
-					switch (cmd.position) {
-						case "left":
-							newBounds = {
-								x: screenX,
-								y: screenY,
-								width: halfW,
-								height
-							};
-							break;
-						case "right":
-							newBounds = {
-								x: screenX + halfW,
-								y: screenY,
-								width: halfW,
-								height
-							};
-							break;
-						case "top-left":
-							newBounds = {
-								x: screenX,
-								y: screenY,
-								width: halfW,
-								height: halfH
-							};
-							break;
-						case "bottom-left":
-							newBounds = {
-								x: screenX,
-								y: screenY + halfH,
-								width: halfW,
-								height: halfH
-							};
-							break;
-						case "top-right":
-							newBounds = {
-								x: screenX + halfW,
-								y: screenY,
-								width: halfW,
-								height: halfH
-							};
-							break;
-						case "bottom-right":
-							newBounds = {
-								x: screenX + halfW,
-								y: screenY + halfH,
-								width: halfW,
-								height: halfH
-							};
-							break;
-						case "maximize":
-							targetWindow.maximize();
-							continue;
-					}
-					targetWindow.setBounds(newBounds);
-				}
-			}
-			return { success: true };
-		} catch (err) {
-			return {
-				success: false,
-				error: String(err)
-			};
-		}
-	});
-}
-//#endregion
-//#region src/main/logic/permanent-memory.ts
-function registerPermanentMemory({ ipcMain, app }) {
-	const MEMORY_DIR = path.default.resolve(app.getPath("userData"), "Memory");
-	const FILE_PATH = path.default.join(MEMORY_DIR, "saved-user-memory.json");
-	if (!fs.default.existsSync(MEMORY_DIR)) fs.default.mkdirSync(MEMORY_DIR, { recursive: true });
-	ipcMain.handle("save-core-memory", async (_event, fact) => {
-		try {
-			let memoryBank = [];
-			if (fs.default.existsSync(FILE_PATH)) {
-				const data = fs.default.readFileSync(FILE_PATH, "utf-8");
-				memoryBank = data ? JSON.parse(data) : [];
-			}
-			memoryBank.push({
-				fact,
-				timestamp: (/* @__PURE__ */ new Date()).toISOString()
-			});
-			fs.default.writeFileSync(FILE_PATH, JSON.stringify(memoryBank, null, 2));
-			return true;
-		} catch (err) {
-			return false;
-		}
-	});
-	ipcMain.handle("search-core-memory", async () => {
-		try {
-			if (fs.default.existsSync(FILE_PATH)) {
-				const data = fs.default.readFileSync(FILE_PATH, "utf-8");
-				return data ? JSON.parse(data) : [];
-			}
-			return [];
-		} catch (err) {
-			return [];
-		}
-	});
-}
-//#endregion
-//#region node_modules/consola/dist/core.mjs
-var LogLevels = {
-	silent: Number.NEGATIVE_INFINITY,
-	fatal: 0,
-	error: 0,
-	warn: 1,
-	log: 2,
-	info: 3,
-	success: 3,
-	fail: 3,
-	ready: 3,
-	start: 3,
-	box: 3,
-	debug: 4,
-	trace: 5,
-	verbose: Number.POSITIVE_INFINITY
-};
-var LogTypes = {
-	silent: { level: -1 },
-	fatal: { level: LogLevels.fatal },
-	error: { level: LogLevels.error },
-	warn: { level: LogLevels.warn },
-	log: { level: LogLevels.log },
-	info: { level: LogLevels.info },
-	success: { level: LogLevels.success },
-	fail: { level: LogLevels.fail },
-	ready: { level: LogLevels.info },
-	start: { level: LogLevels.info },
-	box: { level: LogLevels.info },
-	debug: { level: LogLevels.debug },
-	trace: { level: LogLevels.trace },
-	verbose: { level: LogLevels.verbose }
-};
-function isPlainObject$1(value) {
-	if (value === null || typeof value !== "object") return false;
-	const prototype = Object.getPrototypeOf(value);
-	if (prototype !== null && prototype !== Object.prototype && Object.getPrototypeOf(prototype) !== null) return false;
-	if (Symbol.iterator in value) return false;
-	if (Symbol.toStringTag in value) return Object.prototype.toString.call(value) === "[object Module]";
-	return true;
-}
-function _defu(baseObject, defaults, namespace = ".", merger) {
-	if (!isPlainObject$1(defaults)) return _defu(baseObject, {}, namespace, merger);
-	const object = Object.assign({}, defaults);
-	for (const key in baseObject) {
-		if (key === "__proto__" || key === "constructor") continue;
-		const value = baseObject[key];
-		if (value === null || value === void 0) continue;
-		if (merger && merger(object, key, value, namespace)) continue;
-		if (Array.isArray(value) && Array.isArray(object[key])) object[key] = [...value, ...object[key]];
-		else if (isPlainObject$1(value) && isPlainObject$1(object[key])) object[key] = _defu(value, object[key], (namespace ? `${namespace}.` : "") + key.toString(), merger);
-		else object[key] = value;
-	}
-	return object;
-}
-function createDefu(merger) {
-	return (...arguments_) => arguments_.reduce((p, c) => _defu(p, c, "", merger), {});
-}
-var defu = createDefu();
-function isPlainObject$2(obj) {
-	return Object.prototype.toString.call(obj) === "[object Object]";
-}
-function isLogObj(arg) {
-	if (!isPlainObject$2(arg)) return false;
-	if (!arg.message && !arg.args) return false;
-	if (arg.stack) return false;
-	return true;
-}
-var paused = false;
-var queue = [];
-var Consola = class Consola {
-	options;
-	_lastLog;
-	_mockFn;
-	/**
-	* Creates an instance of Consola with specified options or defaults.
-	*
-	* @param {Partial<ConsolaOptions>} [options={}] - Configuration options for the Consola instance.
-	*/
-	constructor(options = {}) {
-		const types = options.types || LogTypes;
-		this.options = defu({
-			...options,
-			defaults: { ...options.defaults },
-			level: _normalizeLogLevel(options.level, types),
-			reporters: [...options.reporters || []]
-		}, {
-			types: LogTypes,
-			throttle: 1e3,
-			throttleMin: 5,
-			formatOptions: {
-				date: true,
-				colors: false,
-				compact: true
-			}
-		});
-		for (const type in types) {
-			const defaults = {
-				type,
-				...this.options.defaults,
-				...types[type]
-			};
-			this[type] = this._wrapLogFn(defaults);
-			this[type].raw = this._wrapLogFn(defaults, true);
-		}
-		if (this.options.mockFn) this.mockTypes();
-		this._lastLog = {};
-	}
-	/**
-	* Gets the current log level of the Consola instance.
-	*
-	* @returns {number} The current log level.
-	*/
-	get level() {
-		return this.options.level;
-	}
-	/**
-	* Sets the minimum log level that will be output by the instance.
-	*
-	* @param {number} level - The new log level to set.
-	*/
-	set level(level) {
-		this.options.level = _normalizeLogLevel(level, this.options.types, this.options.level);
-	}
-	/**
-	* Displays a prompt to the user and returns the response.
-	* Throw an error if `prompt` is not supported by the current configuration.
-	*
-	* @template T
-	* @param {string} message - The message to display in the prompt.
-	* @param {T} [opts] - Optional options for the prompt. See {@link PromptOptions}.
-	* @returns {promise<T>} A promise that infer with the prompt options. See {@link PromptOptions}.
-	*/
-	prompt(message, opts) {
-		if (!this.options.prompt) throw new Error("prompt is not supported!");
-		return this.options.prompt(message, opts);
-	}
-	/**
-	* Creates a new instance of Consola, inheriting options from the current instance, with possible overrides.
-	*
-	* @param {Partial<ConsolaOptions>} options - Optional overrides for the new instance. See {@link ConsolaOptions}.
-	* @returns {ConsolaInstance} A new Consola instance. See {@link ConsolaInstance}.
-	*/
-	create(options) {
-		const instance = new Consola({
-			...this.options,
-			...options
-		});
-		if (this._mockFn) instance.mockTypes(this._mockFn);
-		return instance;
-	}
-	/**
-	* Creates a new Consola instance with the specified default log object properties.
-	*
-	* @param {InputLogObject} defaults - Default properties to include in any log from the new instance. See {@link InputLogObject}.
-	* @returns {ConsolaInstance} A new Consola instance. See {@link ConsolaInstance}.
-	*/
-	withDefaults(defaults) {
-		return this.create({
-			...this.options,
-			defaults: {
-				...this.options.defaults,
-				...defaults
-			}
-		});
-	}
-	/**
-	* Creates a new Consola instance with a specified tag, which will be included in every log.
-	*
-	* @param {string} tag - The tag to include in each log of the new instance.
-	* @returns {ConsolaInstance} A new Consola instance. See {@link ConsolaInstance}.
-	*/
-	withTag(tag) {
-		return this.withDefaults({ tag: this.options.defaults.tag ? this.options.defaults.tag + ":" + tag : tag });
-	}
-	/**
-	* Adds a custom reporter to the Consola instance.
-	* Reporters will be called for each log message, depending on their implementation and log level.
-	*
-	* @param {ConsolaReporter} reporter - The reporter to add. See {@link ConsolaReporter}.
-	* @returns {Consola} The current Consola instance.
-	*/
-	addReporter(reporter) {
-		this.options.reporters.push(reporter);
-		return this;
-	}
-	/**
-	* Removes a custom reporter from the Consola instance.
-	* If no reporter is specified, all reporters will be removed.
-	*
-	* @param {ConsolaReporter} reporter - The reporter to remove. See {@link ConsolaReporter}.
-	* @returns {Consola} The current Consola instance.
-	*/
-	removeReporter(reporter) {
-		if (reporter) {
-			const i = this.options.reporters.indexOf(reporter);
-			if (i !== -1) return this.options.reporters.splice(i, 1);
-		} else this.options.reporters.splice(0);
-		return this;
-	}
-	/**
-	* Replaces all reporters of the Consola instance with the specified array of reporters.
-	*
-	* @param {ConsolaReporter[]} reporters - The new reporters to set. See {@link ConsolaReporter}.
-	* @returns {Consola} The current Consola instance.
-	*/
-	setReporters(reporters) {
-		this.options.reporters = Array.isArray(reporters) ? reporters : [reporters];
-		return this;
-	}
-	wrapAll() {
-		this.wrapConsole();
-		this.wrapStd();
-	}
-	restoreAll() {
-		this.restoreConsole();
-		this.restoreStd();
-	}
-	/**
-	* Overrides console methods with Consola logging methods for consistent logging.
-	*/
-	wrapConsole() {
-		for (const type in this.options.types) {
-			if (!console["__" + type]) console["__" + type] = console[type];
-			console[type] = this[type].raw;
-		}
-	}
-	/**
-	* Restores the original console methods, removing Consola overrides.
-	*/
-	restoreConsole() {
-		for (const type in this.options.types) if (console["__" + type]) {
-			console[type] = console["__" + type];
-			delete console["__" + type];
-		}
-	}
-	/**
-	* Overrides standard output and error streams to redirect them through Consola.
-	*/
-	wrapStd() {
-		this._wrapStream(this.options.stdout, "log");
-		this._wrapStream(this.options.stderr, "log");
-	}
-	_wrapStream(stream, type) {
-		if (!stream) return;
-		if (!stream.__write) stream.__write = stream.write;
-		stream.write = (data) => {
-			this[type].raw(String(data).trim());
-		};
-	}
-	/**
-	* Restores the original standard output and error streams, removing the Consola redirection.
-	*/
-	restoreStd() {
-		this._restoreStream(this.options.stdout);
-		this._restoreStream(this.options.stderr);
-	}
-	_restoreStream(stream) {
-		if (!stream) return;
-		if (stream.__write) {
-			stream.write = stream.__write;
-			delete stream.__write;
-		}
-	}
-	/**
-	* Pauses logging, queues incoming logs until resumed.
-	*/
-	pauseLogs() {
-		paused = true;
-	}
-	/**
-	* Resumes logging, processing any queued logs.
-	*/
-	resumeLogs() {
-		paused = false;
-		const _queue = queue.splice(0);
-		for (const item of _queue) item[0]._logFn(item[1], item[2]);
-	}
-	/**
-	* Replaces logging methods with mocks if a mock function is provided.
-	*
-	* @param {ConsolaOptions["mockFn"]} mockFn - The function to use for mocking logging methods. See {@link ConsolaOptions["mockFn"]}.
-	*/
-	mockTypes(mockFn) {
-		const _mockFn = mockFn || this.options.mockFn;
-		this._mockFn = _mockFn;
-		if (typeof _mockFn !== "function") return;
-		for (const type in this.options.types) {
-			this[type] = _mockFn(type, this.options.types[type]) || this[type];
-			this[type].raw = this[type];
-		}
-	}
-	_wrapLogFn(defaults, isRaw) {
-		return (...args) => {
-			if (paused) {
-				queue.push([
-					this,
-					defaults,
-					args,
-					isRaw
-				]);
-				return;
-			}
-			return this._logFn(defaults, args, isRaw);
-		};
-	}
-	_logFn(defaults, args, isRaw) {
-		if ((defaults.level || 0) > this.level) return false;
-		const logObj = {
-			date: /* @__PURE__ */ new Date(),
-			args: [],
-			...defaults,
-			level: _normalizeLogLevel(defaults.level, this.options.types)
-		};
-		if (!isRaw && args.length === 1 && isLogObj(args[0])) Object.assign(logObj, args[0]);
-		else logObj.args = [...args];
-		if (logObj.message) {
-			logObj.args.unshift(logObj.message);
-			delete logObj.message;
-		}
-		if (logObj.additional) {
-			if (!Array.isArray(logObj.additional)) logObj.additional = logObj.additional.split("\n");
-			logObj.args.push("\n" + logObj.additional.join("\n"));
-			delete logObj.additional;
-		}
-		logObj.type = typeof logObj.type === "string" ? logObj.type.toLowerCase() : "log";
-		logObj.tag = typeof logObj.tag === "string" ? logObj.tag : "";
-		const resolveLog = (newLog = false) => {
-			const repeated = (this._lastLog.count || 0) - this.options.throttleMin;
-			if (this._lastLog.object && repeated > 0) {
-				const args2 = [...this._lastLog.object.args];
-				if (repeated > 1) args2.push(`(repeated ${repeated} times)`);
-				this._log({
-					...this._lastLog.object,
-					args: args2
-				});
-				this._lastLog.count = 1;
-			}
-			if (newLog) {
-				this._lastLog.object = logObj;
-				this._log(logObj);
-			}
-		};
-		clearTimeout(this._lastLog.timeout);
-		const diffTime = this._lastLog.time && logObj.date ? logObj.date.getTime() - this._lastLog.time.getTime() : 0;
-		this._lastLog.time = logObj.date;
-		if (diffTime < this.options.throttle) try {
-			const serializedLog = JSON.stringify([
-				logObj.type,
-				logObj.tag,
-				logObj.args
-			]);
-			const isSameLog = this._lastLog.serialized === serializedLog;
-			this._lastLog.serialized = serializedLog;
-			if (isSameLog) {
-				this._lastLog.count = (this._lastLog.count || 0) + 1;
-				if (this._lastLog.count > this.options.throttleMin) {
-					this._lastLog.timeout = setTimeout(resolveLog, this.options.throttle);
-					return;
-				}
-			}
-		} catch {}
-		resolveLog(true);
-	}
-	_log(logObj) {
-		for (const reporter of this.options.reporters) reporter.log(logObj, { options: this.options });
-	}
-};
-function _normalizeLogLevel(input, types = {}, defaultLevel = 3) {
-	if (input === void 0) return defaultLevel;
-	if (typeof input === "number") return input;
-	if (types[input] && types[input].level !== void 0) return types[input].level;
-	return defaultLevel;
-}
-Consola.prototype.add = Consola.prototype.addReporter;
-Consola.prototype.remove = Consola.prototype.removeReporter;
-Consola.prototype.clear = Consola.prototype.removeReporter;
-Consola.prototype.withScope = Consola.prototype.withTag;
-Consola.prototype.mock = Consola.prototype.mockTypes;
-Consola.prototype.pause = Consola.prototype.pauseLogs;
-Consola.prototype.resume = Consola.prototype.resumeLogs;
-function createConsola$1(options = {}) {
-	return new Consola(options);
-}
-//#endregion
-//#region node_modules/consola/dist/shared/consola.DRwqZj3T.mjs
-function parseStack(stack, message) {
-	const cwd = process.cwd() + node_path.sep;
-	return stack.split("\n").splice(message.split("\n").length).map((l) => l.trim().replace("file://", "").replace(cwd, ""));
-}
-function writeStream(data, stream) {
-	return (stream.__write || stream.write).call(stream, data);
-}
-var bracket = (x) => x ? `[${x}]` : "";
-var BasicReporter = class {
-	formatStack(stack, message, opts) {
-		const indent = "  ".repeat((opts?.errorLevel || 0) + 1);
-		return indent + parseStack(stack, message).join(`
-${indent}`);
-	}
-	formatError(err, opts) {
-		const message = err.message ?? (0, node_util.formatWithOptions)(opts, err);
-		const stack = err.stack ? this.formatStack(err.stack, message, opts) : "";
-		const level = opts?.errorLevel || 0;
-		const causedPrefix = level > 0 ? `${"  ".repeat(level)}[cause]: ` : "";
-		const causedError = err.cause ? "\n\n" + this.formatError(err.cause, {
-			...opts,
-			errorLevel: level + 1
-		}) : "";
-		return causedPrefix + message + "\n" + stack + causedError;
-	}
-	formatArgs(args, opts) {
-		return (0, node_util.formatWithOptions)(opts, ...args.map((arg) => {
-			if (arg && typeof arg.stack === "string") return this.formatError(arg, opts);
-			return arg;
-		}));
-	}
-	formatDate(date, opts) {
-		return opts.date ? date.toLocaleTimeString() : "";
-	}
-	filterAndJoin(arr) {
-		return arr.filter(Boolean).join(" ");
-	}
-	formatLogObj(logObj, opts) {
-		const message = this.formatArgs(logObj.args, opts);
-		if (logObj.type === "box") return "\n" + [
-			bracket(logObj.tag),
-			logObj.title && logObj.title,
-			...message.split("\n")
-		].filter(Boolean).map((l) => " > " + l).join("\n") + "\n";
-		return this.filterAndJoin([
-			bracket(logObj.type),
-			bracket(logObj.tag),
-			message
-		]);
-	}
-	log(logObj, ctx) {
-		return writeStream(this.formatLogObj(logObj, {
-			columns: ctx.options.stdout.columns || 0,
-			...ctx.options.formatOptions
-		}) + "\n", logObj.level < 2 ? ctx.options.stderr || process.stderr : ctx.options.stdout || process.stdout);
-	}
-};
-//#endregion
-//#region node_modules/consola/dist/shared/consola.DXBYu-KD.mjs
-var { env = {}, argv = [], platform = "" } = typeof process === "undefined" ? {} : process;
-var isDisabled = "NO_COLOR" in env || argv.includes("--no-color");
-var isForced = "FORCE_COLOR" in env || argv.includes("--color");
-var isWindows = platform === "win32";
-var isDumbTerminal = env.TERM === "dumb";
-var isCompatibleTerminal = node_tty && node_tty.isatty && node_tty.isatty(1) && env.TERM && !isDumbTerminal;
-var isCI = "CI" in env && ("GITHUB_ACTIONS" in env || "GITLAB_CI" in env || "CIRCLECI" in env);
-var isColorSupported = !isDisabled && (isForced || isWindows && !isDumbTerminal || isCompatibleTerminal || isCI);
-function replaceClose(index, string, close, replace, head = string.slice(0, Math.max(0, index)) + replace, tail = string.slice(Math.max(0, index + close.length)), next = tail.indexOf(close)) {
-	return head + (next < 0 ? tail : replaceClose(next, tail, close, replace));
-}
-function clearBleed(index, string, open, close, replace) {
-	return index < 0 ? open + string + close : open + replaceClose(index, string, close, replace) + close;
-}
-function filterEmpty(open, close, replace = open, at = open.length + 1) {
-	return (string) => string || !(string === "" || string === void 0) ? clearBleed(("" + string).indexOf(close, at), string, open, close, replace) : "";
-}
-function init(open, close, replace) {
-	return filterEmpty(`\x1B[${open}m`, `\x1B[${close}m`, replace);
-}
-var colorDefs = {
-	reset: init(0, 0),
-	bold: init(1, 22, "\x1B[22m\x1B[1m"),
-	dim: init(2, 22, "\x1B[22m\x1B[2m"),
-	italic: init(3, 23),
-	underline: init(4, 24),
-	inverse: init(7, 27),
-	hidden: init(8, 28),
-	strikethrough: init(9, 29),
-	black: init(30, 39),
-	red: init(31, 39),
-	green: init(32, 39),
-	yellow: init(33, 39),
-	blue: init(34, 39),
-	magenta: init(35, 39),
-	cyan: init(36, 39),
-	white: init(37, 39),
-	gray: init(90, 39),
-	bgBlack: init(40, 49),
-	bgRed: init(41, 49),
-	bgGreen: init(42, 49),
-	bgYellow: init(43, 49),
-	bgBlue: init(44, 49),
-	bgMagenta: init(45, 49),
-	bgCyan: init(46, 49),
-	bgWhite: init(47, 49),
-	blackBright: init(90, 39),
-	redBright: init(91, 39),
-	greenBright: init(92, 39),
-	yellowBright: init(93, 39),
-	blueBright: init(94, 39),
-	magentaBright: init(95, 39),
-	cyanBright: init(96, 39),
-	whiteBright: init(97, 39),
-	bgBlackBright: init(100, 49),
-	bgRedBright: init(101, 49),
-	bgGreenBright: init(102, 49),
-	bgYellowBright: init(103, 49),
-	bgBlueBright: init(104, 49),
-	bgMagentaBright: init(105, 49),
-	bgCyanBright: init(106, 49),
-	bgWhiteBright: init(107, 49)
-};
-function createColors(useColor = isColorSupported) {
-	return useColor ? colorDefs : Object.fromEntries(Object.keys(colorDefs).map((key) => [key, String]));
-}
-var colors = createColors();
-function getColor$1(color, fallback = "reset") {
-	return colors[color] || colors[fallback];
-}
-var ansiRegex$1 = [String.raw`[\u001B\u009B][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*|[a-zA-Z\d]+(?:;[-a-zA-Z\d\/#&.:=?%@~_]*)*)?\u0007)`, String.raw`(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))`].join("|");
-function stripAnsi$1(text) {
-	return text.replace(new RegExp(ansiRegex$1, "g"), "");
-}
-var boxStylePresets = {
-	solid: {
-		tl: "┌",
-		tr: "┐",
-		bl: "└",
-		br: "┘",
-		h: "─",
-		v: "│"
-	},
-	double: {
-		tl: "╔",
-		tr: "╗",
-		bl: "╚",
-		br: "╝",
-		h: "═",
-		v: "║"
-	},
-	doubleSingle: {
-		tl: "╓",
-		tr: "╖",
-		bl: "╙",
-		br: "╜",
-		h: "─",
-		v: "║"
-	},
-	doubleSingleRounded: {
-		tl: "╭",
-		tr: "╮",
-		bl: "╰",
-		br: "╯",
-		h: "─",
-		v: "║"
-	},
-	singleThick: {
-		tl: "┏",
-		tr: "┓",
-		bl: "┗",
-		br: "┛",
-		h: "━",
-		v: "┃"
-	},
-	singleDouble: {
-		tl: "╒",
-		tr: "╕",
-		bl: "╘",
-		br: "╛",
-		h: "═",
-		v: "│"
-	},
-	singleDoubleRounded: {
-		tl: "╭",
-		tr: "╮",
-		bl: "╰",
-		br: "╯",
-		h: "═",
-		v: "│"
-	},
-	rounded: {
-		tl: "╭",
-		tr: "╮",
-		bl: "╰",
-		br: "╯",
-		h: "─",
-		v: "│"
-	}
-};
-var defaultStyle = {
-	borderColor: "white",
-	borderStyle: "rounded",
-	valign: "center",
-	padding: 2,
-	marginLeft: 1,
-	marginTop: 1,
-	marginBottom: 1
-};
-function box(text, _opts = {}) {
-	const opts = {
-		..._opts,
-		style: {
-			...defaultStyle,
-			..._opts.style
-		}
-	};
-	const textLines = text.split("\n");
-	const boxLines = [];
-	const _color = getColor$1(opts.style.borderColor);
-	const borderStyle = { ...typeof opts.style.borderStyle === "string" ? boxStylePresets[opts.style.borderStyle] || boxStylePresets.solid : opts.style.borderStyle };
-	if (_color) for (const key in borderStyle) borderStyle[key] = _color(borderStyle[key]);
-	const paddingOffset = opts.style.padding % 2 === 0 ? opts.style.padding : opts.style.padding + 1;
-	const height = textLines.length + paddingOffset;
-	const width = Math.max(...textLines.map((line) => stripAnsi$1(line).length), opts.title ? stripAnsi$1(opts.title).length : 0) + paddingOffset;
-	const widthOffset = width + paddingOffset;
-	const leftSpace = opts.style.marginLeft > 0 ? " ".repeat(opts.style.marginLeft) : "";
-	if (opts.style.marginTop > 0) boxLines.push("".repeat(opts.style.marginTop));
-	if (opts.title) {
-		const title = _color ? _color(opts.title) : opts.title;
-		const left = borderStyle.h.repeat(Math.floor((width - stripAnsi$1(opts.title).length) / 2));
-		const right = borderStyle.h.repeat(width - stripAnsi$1(opts.title).length - stripAnsi$1(left).length + paddingOffset);
-		boxLines.push(`${leftSpace}${borderStyle.tl}${left}${title}${right}${borderStyle.tr}`);
-	} else boxLines.push(`${leftSpace}${borderStyle.tl}${borderStyle.h.repeat(widthOffset)}${borderStyle.tr}`);
-	const valignOffset = opts.style.valign === "center" ? Math.floor((height - textLines.length) / 2) : opts.style.valign === "top" ? height - textLines.length - paddingOffset : height - textLines.length;
-	for (let i = 0; i < height; i++) if (i < valignOffset || i >= valignOffset + textLines.length) boxLines.push(`${leftSpace}${borderStyle.v}${" ".repeat(widthOffset)}${borderStyle.v}`);
-	else {
-		const line = textLines[i - valignOffset];
-		const left = " ".repeat(paddingOffset);
-		const right = " ".repeat(width - stripAnsi$1(line).length);
-		boxLines.push(`${leftSpace}${borderStyle.v}${left}${line}${right}${borderStyle.v}`);
-	}
-	boxLines.push(`${leftSpace}${borderStyle.bl}${borderStyle.h.repeat(widthOffset)}${borderStyle.br}`);
-	if (opts.style.marginBottom > 0) boxLines.push("".repeat(opts.style.marginBottom));
-	return boxLines.join("\n");
-}
-//#endregion
-//#region node_modules/consola/dist/index.mjs
-var r = Object.create(null), i = (e) => globalThis.process.env || {
-	"BASE_URL": "/",
-	"DEV": false,
-	"MODE": "production",
-	"PROD": true,
-	"SSR": true,
-	"VITE_SKIP_OAUTH": "true"
-}, o = new Proxy(r, {
-	get(e, s) {
-		return i()[s] ?? r[s];
-	},
-	has(e, s) {
-		return s in i() || s in r;
-	},
-	set(e, s, E) {
-		const B = i(true);
-		return B[s] = E, true;
-	},
-	deleteProperty(e, s) {
-		if (!s) return false;
-		const E = i(true);
-		return delete E[s], true;
-	},
-	ownKeys() {
-		const e = i(true);
-		return Object.keys(e);
-	}
-}), t = typeof process < "u" && process.env && process.env.NODE_ENV || "", f = [
-	["APPVEYOR"],
-	[
-		"AWS_AMPLIFY",
-		"AWS_APP_ID",
-		{ ci: true }
-	],
-	["AZURE_PIPELINES", "SYSTEM_TEAMFOUNDATIONCOLLECTIONURI"],
-	["AZURE_STATIC", "INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN"],
-	["APPCIRCLE", "AC_APPCIRCLE"],
-	["BAMBOO", "bamboo_planKey"],
-	["BITBUCKET", "BITBUCKET_COMMIT"],
-	["BITRISE", "BITRISE_IO"],
-	["BUDDY", "BUDDY_WORKSPACE_ID"],
-	["BUILDKITE"],
-	["CIRCLE", "CIRCLECI"],
-	["CIRRUS", "CIRRUS_CI"],
-	[
-		"CLOUDFLARE_PAGES",
-		"CF_PAGES",
-		{ ci: true }
-	],
-	["CODEBUILD", "CODEBUILD_BUILD_ARN"],
-	["CODEFRESH", "CF_BUILD_ID"],
-	["DRONE"],
-	["DRONE", "DRONE_BUILD_EVENT"],
-	["DSARI"],
-	["GITHUB_ACTIONS"],
-	["GITLAB", "GITLAB_CI"],
-	["GITLAB", "CI_MERGE_REQUEST_ID"],
-	["GOCD", "GO_PIPELINE_LABEL"],
-	["LAYERCI"],
-	["HUDSON", "HUDSON_URL"],
-	["JENKINS", "JENKINS_URL"],
-	["MAGNUM"],
-	["NETLIFY"],
-	[
-		"NETLIFY",
-		"NETLIFY_LOCAL",
-		{ ci: false }
-	],
-	["NEVERCODE"],
-	["RENDER"],
-	["SAIL", "SAILCI"],
-	["SEMAPHORE"],
-	["SCREWDRIVER"],
-	["SHIPPABLE"],
-	["SOLANO", "TDDIUM"],
-	["STRIDER"],
-	["TEAMCITY", "TEAMCITY_VERSION"],
-	["TRAVIS"],
-	["VERCEL", "NOW_BUILDER"],
-	[
-		"VERCEL",
-		"VERCEL",
-		{ ci: false }
-	],
-	[
-		"VERCEL",
-		"VERCEL_ENV",
-		{ ci: false }
-	],
-	["APPCENTER", "APPCENTER_BUILD_ID"],
-	[
-		"CODESANDBOX",
-		"CODESANDBOX_SSE",
-		{ ci: false }
-	],
-	[
-		"CODESANDBOX",
-		"CODESANDBOX_HOST",
-		{ ci: false }
-	],
-	["STACKBLITZ"],
-	["STORMKIT"],
-	["CLEAVR"],
-	["ZEABUR"],
-	[
-		"CODESPHERE",
-		"CODESPHERE_APP_ID",
-		{ ci: true }
-	],
-	["RAILWAY", "RAILWAY_PROJECT_ID"],
-	["RAILWAY", "RAILWAY_SERVICE_ID"],
-	["DENO-DEPLOY", "DENO_DEPLOYMENT_ID"],
-	[
-		"FIREBASE_APP_HOSTING",
-		"FIREBASE_APP_HOSTING",
-		{ ci: true }
-	]
-];
-function b() {
-	if (globalThis.process.env) for (const e of f) {
-		const s = e[1] || e[0];
-		if (globalThis.process.env[s]) return {
-			name: e[0].toLowerCase(),
-			...e[2]
-		};
-	}
-	return globalThis.process.env?.SHELL === "/bin/jsh" && globalThis.process?.versions?.webcontainer ? {
-		name: "stackblitz",
-		ci: false
-	} : {
-		name: "",
-		ci: false
-	};
-}
-var l = b();
-l.name;
-function n(e) {
-	return e ? e !== "false" : false;
-}
-var I = globalThis.process?.platform || "", T = n(o.CI) || l.ci !== false, a = n(globalThis.process?.stdout && globalThis.process?.stdout.isTTY), g = n(o.DEBUG), R = t === "test" || n(o.TEST);
-o.MINIMAL;
-var A = /^win/i.test(I);
-!n(o.NO_COLOR) && (n(o.FORCE_COLOR) || (a || A) && o.TERM);
-var C = (globalThis.process?.versions?.node || "").replace(/^v/, "") || null;
-Number(C?.split(".")[0]);
-var y = globalThis.process || Object.create(null), _ = { versions: {} };
-new Proxy(y, { get(e, s) {
-	if (s === "env") return o;
-	if (s in e) return e[s];
-	if (s in _) return _[s];
-} });
-var c = globalThis.process?.release?.name === "node", O = !!globalThis.Bun || !!globalThis.process?.versions?.bun, D = !!globalThis.Deno, L = !!globalThis.fastly, S = !!globalThis.Netlify, u = !!globalThis.EdgeRuntime, N = globalThis.navigator?.userAgent === "Cloudflare-Workers", F = [
-	[S, "netlify"],
-	[u, "edge-light"],
-	[N, "workerd"],
-	[L, "fastly"],
-	[D, "deno"],
-	[O, "bun"],
-	[c, "node"]
-];
-function G$1() {
-	const e = F.find((s) => s[0]);
-	if (e) return { name: e[1] };
-}
-G$1()?.name;
-function ansiRegex({ onlyFirst = false } = {}) {
-	const pattern = [`[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?(?:\\u0007|\\u001B\\u005C|\\u009C))`, "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]))"].join("|");
-	return new RegExp(pattern, onlyFirst ? void 0 : "g");
-}
-var regex = ansiRegex();
-function stripAnsi(string) {
-	if (typeof string !== "string") throw new TypeError(`Expected a \`string\`, got \`${typeof string}\``);
-	return string.replace(regex, "");
-}
-function isAmbiguous(x) {
-	return x === 161 || x === 164 || x === 167 || x === 168 || x === 170 || x === 173 || x === 174 || x >= 176 && x <= 180 || x >= 182 && x <= 186 || x >= 188 && x <= 191 || x === 198 || x === 208 || x === 215 || x === 216 || x >= 222 && x <= 225 || x === 230 || x >= 232 && x <= 234 || x === 236 || x === 237 || x === 240 || x === 242 || x === 243 || x >= 247 && x <= 250 || x === 252 || x === 254 || x === 257 || x === 273 || x === 275 || x === 283 || x === 294 || x === 295 || x === 299 || x >= 305 && x <= 307 || x === 312 || x >= 319 && x <= 322 || x === 324 || x >= 328 && x <= 331 || x === 333 || x === 338 || x === 339 || x === 358 || x === 359 || x === 363 || x === 462 || x === 464 || x === 466 || x === 468 || x === 470 || x === 472 || x === 474 || x === 476 || x === 593 || x === 609 || x === 708 || x === 711 || x >= 713 && x <= 715 || x === 717 || x === 720 || x >= 728 && x <= 731 || x === 733 || x === 735 || x >= 768 && x <= 879 || x >= 913 && x <= 929 || x >= 931 && x <= 937 || x >= 945 && x <= 961 || x >= 963 && x <= 969 || x === 1025 || x >= 1040 && x <= 1103 || x === 1105 || x === 8208 || x >= 8211 && x <= 8214 || x === 8216 || x === 8217 || x === 8220 || x === 8221 || x >= 8224 && x <= 8226 || x >= 8228 && x <= 8231 || x === 8240 || x === 8242 || x === 8243 || x === 8245 || x === 8251 || x === 8254 || x === 8308 || x === 8319 || x >= 8321 && x <= 8324 || x === 8364 || x === 8451 || x === 8453 || x === 8457 || x === 8467 || x === 8470 || x === 8481 || x === 8482 || x === 8486 || x === 8491 || x === 8531 || x === 8532 || x >= 8539 && x <= 8542 || x >= 8544 && x <= 8555 || x >= 8560 && x <= 8569 || x === 8585 || x >= 8592 && x <= 8601 || x === 8632 || x === 8633 || x === 8658 || x === 8660 || x === 8679 || x === 8704 || x === 8706 || x === 8707 || x === 8711 || x === 8712 || x === 8715 || x === 8719 || x === 8721 || x === 8725 || x === 8730 || x >= 8733 && x <= 8736 || x === 8739 || x === 8741 || x >= 8743 && x <= 8748 || x === 8750 || x >= 8756 && x <= 8759 || x === 8764 || x === 8765 || x === 8776 || x === 8780 || x === 8786 || x === 8800 || x === 8801 || x >= 8804 && x <= 8807 || x === 8810 || x === 8811 || x === 8814 || x === 8815 || x === 8834 || x === 8835 || x === 8838 || x === 8839 || x === 8853 || x === 8857 || x === 8869 || x === 8895 || x === 8978 || x >= 9312 && x <= 9449 || x >= 9451 && x <= 9547 || x >= 9552 && x <= 9587 || x >= 9600 && x <= 9615 || x >= 9618 && x <= 9621 || x === 9632 || x === 9633 || x >= 9635 && x <= 9641 || x === 9650 || x === 9651 || x === 9654 || x === 9655 || x === 9660 || x === 9661 || x === 9664 || x === 9665 || x >= 9670 && x <= 9672 || x === 9675 || x >= 9678 && x <= 9681 || x >= 9698 && x <= 9701 || x === 9711 || x === 9733 || x === 9734 || x === 9737 || x === 9742 || x === 9743 || x === 9756 || x === 9758 || x === 9792 || x === 9794 || x === 9824 || x === 9825 || x >= 9827 && x <= 9829 || x >= 9831 && x <= 9834 || x === 9836 || x === 9837 || x === 9839 || x === 9886 || x === 9887 || x === 9919 || x >= 9926 && x <= 9933 || x >= 9935 && x <= 9939 || x >= 9941 && x <= 9953 || x === 9955 || x === 9960 || x === 9961 || x >= 9963 && x <= 9969 || x === 9972 || x >= 9974 && x <= 9977 || x === 9979 || x === 9980 || x === 9982 || x === 9983 || x === 10045 || x >= 10102 && x <= 10111 || x >= 11094 && x <= 11097 || x >= 12872 && x <= 12879 || x >= 57344 && x <= 63743 || x >= 65024 && x <= 65039 || x === 65533 || x >= 127232 && x <= 127242 || x >= 127248 && x <= 127277 || x >= 127280 && x <= 127337 || x >= 127344 && x <= 127373 || x === 127375 || x === 127376 || x >= 127387 && x <= 127404 || x >= 917760 && x <= 917999 || x >= 983040 && x <= 1048573 || x >= 1048576 && x <= 1114109;
-}
-function isFullWidth(x) {
-	return x === 12288 || x >= 65281 && x <= 65376 || x >= 65504 && x <= 65510;
-}
-function isWide(x) {
-	return x >= 4352 && x <= 4447 || x === 8986 || x === 8987 || x === 9001 || x === 9002 || x >= 9193 && x <= 9196 || x === 9200 || x === 9203 || x === 9725 || x === 9726 || x === 9748 || x === 9749 || x >= 9776 && x <= 9783 || x >= 9800 && x <= 9811 || x === 9855 || x >= 9866 && x <= 9871 || x === 9875 || x === 9889 || x === 9898 || x === 9899 || x === 9917 || x === 9918 || x === 9924 || x === 9925 || x === 9934 || x === 9940 || x === 9962 || x === 9970 || x === 9971 || x === 9973 || x === 9978 || x === 9981 || x === 9989 || x === 9994 || x === 9995 || x === 10024 || x === 10060 || x === 10062 || x >= 10067 && x <= 10069 || x === 10071 || x >= 10133 && x <= 10135 || x === 10160 || x === 10175 || x === 11035 || x === 11036 || x === 11088 || x === 11093 || x >= 11904 && x <= 11929 || x >= 11931 && x <= 12019 || x >= 12032 && x <= 12245 || x >= 12272 && x <= 12287 || x >= 12289 && x <= 12350 || x >= 12353 && x <= 12438 || x >= 12441 && x <= 12543 || x >= 12549 && x <= 12591 || x >= 12593 && x <= 12686 || x >= 12688 && x <= 12773 || x >= 12783 && x <= 12830 || x >= 12832 && x <= 12871 || x >= 12880 && x <= 42124 || x >= 42128 && x <= 42182 || x >= 43360 && x <= 43388 || x >= 44032 && x <= 55203 || x >= 63744 && x <= 64255 || x >= 65040 && x <= 65049 || x >= 65072 && x <= 65106 || x >= 65108 && x <= 65126 || x >= 65128 && x <= 65131 || x >= 94176 && x <= 94180 || x === 94192 || x === 94193 || x >= 94208 && x <= 100343 || x >= 100352 && x <= 101589 || x >= 101631 && x <= 101640 || x >= 110576 && x <= 110579 || x >= 110581 && x <= 110587 || x === 110589 || x === 110590 || x >= 110592 && x <= 110882 || x === 110898 || x >= 110928 && x <= 110930 || x === 110933 || x >= 110948 && x <= 110951 || x >= 110960 && x <= 111355 || x >= 119552 && x <= 119638 || x >= 119648 && x <= 119670 || x === 126980 || x === 127183 || x === 127374 || x >= 127377 && x <= 127386 || x >= 127488 && x <= 127490 || x >= 127504 && x <= 127547 || x >= 127552 && x <= 127560 || x === 127568 || x === 127569 || x >= 127584 && x <= 127589 || x >= 127744 && x <= 127776 || x >= 127789 && x <= 127797 || x >= 127799 && x <= 127868 || x >= 127870 && x <= 127891 || x >= 127904 && x <= 127946 || x >= 127951 && x <= 127955 || x >= 127968 && x <= 127984 || x === 127988 || x >= 127992 && x <= 128062 || x === 128064 || x >= 128066 && x <= 128252 || x >= 128255 && x <= 128317 || x >= 128331 && x <= 128334 || x >= 128336 && x <= 128359 || x === 128378 || x === 128405 || x === 128406 || x === 128420 || x >= 128507 && x <= 128591 || x >= 128640 && x <= 128709 || x === 128716 || x >= 128720 && x <= 128722 || x >= 128725 && x <= 128727 || x >= 128732 && x <= 128735 || x === 128747 || x === 128748 || x >= 128756 && x <= 128764 || x >= 128992 && x <= 129003 || x === 129008 || x >= 129292 && x <= 129338 || x >= 129340 && x <= 129349 || x >= 129351 && x <= 129535 || x >= 129648 && x <= 129660 || x >= 129664 && x <= 129673 || x >= 129679 && x <= 129734 || x >= 129742 && x <= 129756 || x >= 129759 && x <= 129769 || x >= 129776 && x <= 129784 || x >= 131072 && x <= 196605 || x >= 196608 && x <= 262141;
-}
-function validate(codePoint) {
-	if (!Number.isSafeInteger(codePoint)) throw new TypeError(`Expected a code point, got \`${typeof codePoint}\`.`);
-}
-function eastAsianWidth(codePoint, { ambiguousAsWide = false } = {}) {
-	validate(codePoint);
-	if (isFullWidth(codePoint) || isWide(codePoint) || ambiguousAsWide && isAmbiguous(codePoint)) return 2;
-	return 1;
-}
-var emojiRegex = () => {
-	return /[#*0-9]\uFE0F?\u20E3|[\xA9\xAE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23ED-\u23EF\u23F1\u23F2\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB\u25FC\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692\u2694-\u2697\u2699\u269B\u269C\u26A0\u26A7\u26AA\u26B0\u26B1\u26BD\u26BE\u26C4\u26C8\u26CF\u26D1\u26E9\u26F0-\u26F5\u26F7\u26F8\u26FA\u2702\u2708\u2709\u270F\u2712\u2714\u2716\u271D\u2721\u2733\u2734\u2744\u2747\u2757\u2763\u27A1\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B55\u3030\u303D\u3297\u3299]\uFE0F?|[\u261D\u270C\u270D](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?|[\u270A\u270B](?:\uD83C[\uDFFB-\uDFFF])?|[\u23E9-\u23EC\u23F0\u23F3\u25FD\u2693\u26A1\u26AB\u26C5\u26CE\u26D4\u26EA\u26FD\u2705\u2728\u274C\u274E\u2753-\u2755\u2795-\u2797\u27B0\u27BF\u2B50]|\u26D3\uFE0F?(?:\u200D\uD83D\uDCA5)?|\u26F9(?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|\u2764\uFE0F?(?:\u200D(?:\uD83D\uDD25|\uD83E\uDE79))?|\uD83C(?:[\uDC04\uDD70\uDD71\uDD7E\uDD7F\uDE02\uDE37\uDF21\uDF24-\uDF2C\uDF36\uDF7D\uDF96\uDF97\uDF99-\uDF9B\uDF9E\uDF9F\uDFCD\uDFCE\uDFD4-\uDFDF\uDFF5\uDFF7]\uFE0F?|[\uDF85\uDFC2\uDFC7](?:\uD83C[\uDFFB-\uDFFF])?|[\uDFC4\uDFCA](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDFCB\uDFCC](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDCCF\uDD8E\uDD91-\uDD9A\uDE01\uDE1A\uDE2F\uDE32-\uDE36\uDE38-\uDE3A\uDE50\uDE51\uDF00-\uDF20\uDF2D-\uDF35\uDF37-\uDF43\uDF45-\uDF4A\uDF4C-\uDF7C\uDF7E-\uDF84\uDF86-\uDF93\uDFA0-\uDFC1\uDFC5\uDFC6\uDFC8\uDFC9\uDFCF-\uDFD3\uDFE0-\uDFF0\uDFF8-\uDFFF]|\uDDE6\uD83C[\uDDE8-\uDDEC\uDDEE\uDDF1\uDDF2\uDDF4\uDDF6-\uDDFA\uDDFC\uDDFD\uDDFF]|\uDDE7\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEF\uDDF1-\uDDF4\uDDF6-\uDDF9\uDDFB\uDDFC\uDDFE\uDDFF]|\uDDE8\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDEE\uDDF0-\uDDF7\uDDFA-\uDDFF]|\uDDE9\uD83C[\uDDEA\uDDEC\uDDEF\uDDF0\uDDF2\uDDF4\uDDFF]|\uDDEA\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDED\uDDF7-\uDDFA]|\uDDEB\uD83C[\uDDEE-\uDDF0\uDDF2\uDDF4\uDDF7]|\uDDEC\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEE\uDDF1-\uDDF3\uDDF5-\uDDFA\uDDFC\uDDFE]|\uDDED\uD83C[\uDDF0\uDDF2\uDDF3\uDDF7\uDDF9\uDDFA]|\uDDEE\uD83C[\uDDE8-\uDDEA\uDDF1-\uDDF4\uDDF6-\uDDF9]|\uDDEF\uD83C[\uDDEA\uDDF2\uDDF4\uDDF5]|\uDDF0\uD83C[\uDDEA\uDDEC-\uDDEE\uDDF2\uDDF3\uDDF5\uDDF7\uDDFC\uDDFE\uDDFF]|\uDDF1\uD83C[\uDDE6-\uDDE8\uDDEE\uDDF0\uDDF7-\uDDFB\uDDFE]|\uDDF2\uD83C[\uDDE6\uDDE8-\uDDED\uDDF0-\uDDFF]|\uDDF3\uD83C[\uDDE6\uDDE8\uDDEA-\uDDEC\uDDEE\uDDF1\uDDF4\uDDF5\uDDF7\uDDFA\uDDFF]|\uDDF4\uD83C\uDDF2|\uDDF5\uD83C[\uDDE6\uDDEA-\uDDED\uDDF0-\uDDF3\uDDF7-\uDDF9\uDDFC\uDDFE]|\uDDF6\uD83C\uDDE6|\uDDF7\uD83C[\uDDEA\uDDF4\uDDF8\uDDFA\uDDFC]|\uDDF8\uD83C[\uDDE6-\uDDEA\uDDEC-\uDDF4\uDDF7-\uDDF9\uDDFB\uDDFD-\uDDFF]|\uDDF9\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDED\uDDEF-\uDDF4\uDDF7\uDDF9\uDDFB\uDDFC\uDDFF]|\uDDFA\uD83C[\uDDE6\uDDEC\uDDF2\uDDF3\uDDF8\uDDFE\uDDFF]|\uDDFB\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDEE\uDDF3\uDDFA]|\uDDFC\uD83C[\uDDEB\uDDF8]|\uDDFD\uD83C\uDDF0|\uDDFE\uD83C[\uDDEA\uDDF9]|\uDDFF\uD83C[\uDDE6\uDDF2\uDDFC]|\uDF44(?:\u200D\uD83D\uDFEB)?|\uDF4B(?:\u200D\uD83D\uDFE9)?|\uDFC3(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDFF3\uFE0F?(?:\u200D(?:\u26A7\uFE0F?|\uD83C\uDF08))?|\uDFF4(?:\u200D\u2620\uFE0F?|\uDB40\uDC67\uDB40\uDC62\uDB40(?:\uDC65\uDB40\uDC6E\uDB40\uDC67|\uDC73\uDB40\uDC63\uDB40\uDC74|\uDC77\uDB40\uDC6C\uDB40\uDC73)\uDB40\uDC7F)?)|\uD83D(?:[\uDC3F\uDCFD\uDD49\uDD4A\uDD6F\uDD70\uDD73\uDD76-\uDD79\uDD87\uDD8A-\uDD8D\uDDA5\uDDA8\uDDB1\uDDB2\uDDBC\uDDC2-\uDDC4\uDDD1-\uDDD3\uDDDC-\uDDDE\uDDE1\uDDE3\uDDE8\uDDEF\uDDF3\uDDFA\uDECB\uDECD-\uDECF\uDEE0-\uDEE5\uDEE9\uDEF0\uDEF3]\uFE0F?|[\uDC42\uDC43\uDC46-\uDC50\uDC66\uDC67\uDC6B-\uDC6D\uDC72\uDC74-\uDC76\uDC78\uDC7C\uDC83\uDC85\uDC8F\uDC91\uDCAA\uDD7A\uDD95\uDD96\uDE4C\uDE4F\uDEC0\uDECC](?:\uD83C[\uDFFB-\uDFFF])?|[\uDC6E\uDC70\uDC71\uDC73\uDC77\uDC81\uDC82\uDC86\uDC87\uDE45-\uDE47\uDE4B\uDE4D\uDE4E\uDEA3\uDEB4\uDEB5](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD74\uDD90](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?|[\uDC00-\uDC07\uDC09-\uDC14\uDC16-\uDC25\uDC27-\uDC3A\uDC3C-\uDC3E\uDC40\uDC44\uDC45\uDC51-\uDC65\uDC6A\uDC79-\uDC7B\uDC7D-\uDC80\uDC84\uDC88-\uDC8E\uDC90\uDC92-\uDCA9\uDCAB-\uDCFC\uDCFF-\uDD3D\uDD4B-\uDD4E\uDD50-\uDD67\uDDA4\uDDFB-\uDE2D\uDE2F-\uDE34\uDE37-\uDE41\uDE43\uDE44\uDE48-\uDE4A\uDE80-\uDEA2\uDEA4-\uDEB3\uDEB7-\uDEBF\uDEC1-\uDEC5\uDED0-\uDED2\uDED5-\uDED7\uDEDC-\uDEDF\uDEEB\uDEEC\uDEF4-\uDEFC\uDFE0-\uDFEB\uDFF0]|\uDC08(?:\u200D\u2B1B)?|\uDC15(?:\u200D\uD83E\uDDBA)?|\uDC26(?:\u200D(?:\u2B1B|\uD83D\uDD25))?|\uDC3B(?:\u200D\u2744\uFE0F?)?|\uDC41\uFE0F?(?:\u200D\uD83D\uDDE8\uFE0F?)?|\uDC68(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDC68\uDC69]\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFE])))?))?|\uDC69(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?[\uDC68\uDC69]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?|\uDC69\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?))|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFE])))?))?|\uDC6F(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDD75(?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDE2E(?:\u200D\uD83D\uDCA8)?|\uDE35(?:\u200D\uD83D\uDCAB)?|\uDE36(?:\u200D\uD83C\uDF2B\uFE0F?)?|\uDE42(?:\u200D[\u2194\u2195]\uFE0F?)?|\uDEB6(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?)|\uD83E(?:[\uDD0C\uDD0F\uDD18-\uDD1F\uDD30-\uDD34\uDD36\uDD77\uDDB5\uDDB6\uDDBB\uDDD2\uDDD3\uDDD5\uDEC3-\uDEC5\uDEF0\uDEF2-\uDEF8](?:\uD83C[\uDFFB-\uDFFF])?|[\uDD26\uDD35\uDD37-\uDD39\uDD3D\uDD3E\uDDB8\uDDB9\uDDCD\uDDCF\uDDD4\uDDD6-\uDDDD](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDDDE\uDDDF](?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD0D\uDD0E\uDD10-\uDD17\uDD20-\uDD25\uDD27-\uDD2F\uDD3A\uDD3F-\uDD45\uDD47-\uDD76\uDD78-\uDDB4\uDDB7\uDDBA\uDDBC-\uDDCC\uDDD0\uDDE0-\uDDFF\uDE70-\uDE7C\uDE80-\uDE89\uDE8F-\uDEC2\uDEC6\uDECE-\uDEDC\uDEDF-\uDEE9]|\uDD3C(?:\u200D[\u2640\u2642]\uFE0F?|\uD83C[\uDFFB-\uDFFF])?|\uDDCE(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDDD1(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1|\uDDD1\u200D\uD83E\uDDD2(?:\u200D\uD83E\uDDD2)?|\uDDD2(?:\u200D\uD83E\uDDD2)?))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFC-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFD-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFD\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFE]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?))?|\uDEF1(?:\uD83C(?:\uDFFB(?:\u200D\uD83E\uDEF2\uD83C[\uDFFC-\uDFFF])?|\uDFFC(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFD-\uDFFF])?|\uDFFD(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])?|\uDFFE(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFD\uDFFF])?|\uDFFF(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFE])?))?)/g;
-};
-var segmenter = globalThis.Intl?.Segmenter ? new Intl.Segmenter() : { segment: (str) => str.split("") };
-var defaultIgnorableCodePointRegex = /^\p{Default_Ignorable_Code_Point}$/u;
-function stringWidth$1(string, options = {}) {
-	if (typeof string !== "string" || string.length === 0) return 0;
-	const { ambiguousIsNarrow = true, countAnsiEscapeCodes = false } = options;
-	if (!countAnsiEscapeCodes) string = stripAnsi(string);
-	if (string.length === 0) return 0;
-	let width = 0;
-	const eastAsianWidthOptions = { ambiguousAsWide: !ambiguousIsNarrow };
-	for (const { segment: character } of segmenter.segment(string)) {
-		const codePoint = character.codePointAt(0);
-		if (codePoint <= 31 || codePoint >= 127 && codePoint <= 159) continue;
-		if (codePoint >= 8203 && codePoint <= 8207 || codePoint === 65279) continue;
-		if (codePoint >= 768 && codePoint <= 879 || codePoint >= 6832 && codePoint <= 6911 || codePoint >= 7616 && codePoint <= 7679 || codePoint >= 8400 && codePoint <= 8447 || codePoint >= 65056 && codePoint <= 65071) continue;
-		if (codePoint >= 55296 && codePoint <= 57343) continue;
-		if (codePoint >= 65024 && codePoint <= 65039) continue;
-		if (defaultIgnorableCodePointRegex.test(character)) continue;
-		if (emojiRegex().test(character)) {
-			width += 2;
-			continue;
-		}
-		width += eastAsianWidth(codePoint, eastAsianWidthOptions);
-	}
-	return width;
-}
-function isUnicodeSupported() {
-	const { env } = node_process.default;
-	const { TERM, TERM_PROGRAM } = env;
-	if (node_process.default.platform !== "win32") return TERM !== "linux";
-	return Boolean(env.WT_SESSION) || Boolean(env.TERMINUS_SUBLIME) || env.ConEmuTask === "{cmd::Cmder}" || TERM_PROGRAM === "Terminus-Sublime" || TERM_PROGRAM === "vscode" || TERM === "xterm-256color" || TERM === "alacritty" || TERM === "rxvt-unicode" || TERM === "rxvt-unicode-256color" || env.TERMINAL_EMULATOR === "JetBrains-JediTerm";
-}
-var TYPE_COLOR_MAP = {
-	info: "cyan",
-	fail: "red",
-	success: "green",
-	ready: "green",
-	start: "magenta"
-};
-var LEVEL_COLOR_MAP = {
-	0: "red",
-	1: "yellow"
-};
-var unicode = isUnicodeSupported();
-var s = (c, fallback) => unicode ? c : fallback;
-var TYPE_ICONS = {
-	error: s("✖", "×"),
-	fatal: s("✖", "×"),
-	ready: s("✔", "√"),
-	warn: s("⚠", "‼"),
-	info: s("ℹ", "i"),
-	success: s("✔", "√"),
-	debug: s("⚙", "D"),
-	trace: s("→", "→"),
-	fail: s("✖", "×"),
-	start: s("◐", "o"),
-	log: ""
-};
-function stringWidth(str) {
-	if (!(typeof Intl === "object") || !Intl.Segmenter) return stripAnsi$1(str).length;
-	return stringWidth$1(str);
-}
-var FancyReporter = class extends BasicReporter {
-	formatStack(stack, message, opts) {
-		const indent = "  ".repeat((opts?.errorLevel || 0) + 1);
-		return `
-${indent}` + parseStack(stack, message).map((line) => "  " + line.replace(/^at +/, (m) => colors.gray(m)).replace(/\((.+)\)/, (_, m) => `(${colors.cyan(m)})`)).join(`
-${indent}`);
-	}
-	formatType(logObj, isBadge, opts) {
-		const typeColor = TYPE_COLOR_MAP[logObj.type] || LEVEL_COLOR_MAP[logObj.level] || "gray";
-		if (isBadge) return getBgColor(typeColor)(colors.black(` ${logObj.type.toUpperCase()} `));
-		const _type = typeof TYPE_ICONS[logObj.type] === "string" ? TYPE_ICONS[logObj.type] : logObj.icon || logObj.type;
-		return _type ? getColor(typeColor)(_type) : "";
-	}
-	formatLogObj(logObj, opts) {
-		const [message, ...additional] = this.formatArgs(logObj.args, opts).split("\n");
-		if (logObj.type === "box") return box(characterFormat(message + (additional.length > 0 ? "\n" + additional.join("\n") : "")), {
-			title: logObj.title ? characterFormat(logObj.title) : void 0,
-			style: logObj.style
-		});
-		const date = this.formatDate(logObj.date, opts);
-		const coloredDate = date && colors.gray(date);
-		const isBadge = logObj.badge ?? logObj.level < 2;
-		const type = this.formatType(logObj, isBadge, opts);
-		const tag = logObj.tag ? colors.gray(logObj.tag) : "";
-		let line;
-		const left = this.filterAndJoin([type, characterFormat(message)]);
-		const right = this.filterAndJoin(opts.columns ? [tag, coloredDate] : [tag]);
-		const space = (opts.columns || 0) - stringWidth(left) - stringWidth(right) - 2;
-		line = space > 0 && (opts.columns || 0) >= 80 ? left + " ".repeat(space) + right : (right ? `${colors.gray(`[${right}]`)} ` : "") + left;
-		line += characterFormat(additional.length > 0 ? "\n" + additional.join("\n") : "");
-		if (logObj.type === "trace") {
-			const _err = /* @__PURE__ */ new Error("Trace: " + logObj.message);
-			line += this.formatStack(_err.stack || "", _err.message);
-		}
-		return isBadge ? "\n" + line + "\n" : line;
-	}
-};
-function characterFormat(str) {
-	return str.replace(/`([^`]+)`/gm, (_, m) => colors.cyan(m)).replace(/\s+_([^_]+)_\s+/gm, (_, m) => ` ${colors.underline(m)} `);
-}
-function getColor(color = "white") {
-	return colors[color] || colors.white;
-}
-function getBgColor(color = "bgWhite") {
-	return colors[`bg${color[0].toUpperCase()}${color.slice(1)}`] || colors.bgWhite;
-}
-function createConsola(options = {}) {
-	let level = _getDefaultLogLevel();
-	if (process.env.CONSOLA_LEVEL) level = Number.parseInt(process.env.CONSOLA_LEVEL) ?? level;
-	return createConsola$1({
-		level,
-		defaults: { level },
-		stdout: process.stdout,
-		stderr: process.stderr,
-		prompt: (...args) => Promise.resolve().then(() => require("./chunks/prompt-CLQTRVmc.js")).then((m) => m.prompt(...args)),
-		reporters: options.reporters || [options.fancy ?? !(T || R) ? new FancyReporter() : new BasicReporter()],
-		...options
-	});
-}
-function _getDefaultLogLevel() {
-	if (g) return LogLevels.debug;
-	if (R) return LogLevels.warn;
-	return LogLevels.info;
-}
-var consola = createConsola();
-//#endregion
-//#region node_modules/untun/dist/index.mjs
-async function startTunnel(opts) {
-	const { installCloudflared, startCloudflaredTunnel, cloudflaredBinPath, cloudflaredNotice } = await Promise.resolve().then(() => require("./chunks/chunks-D7gdiBfK.js"));
-	const url = opts.url || `${opts.protocol || "http"}://${opts.hostname ?? "localhost"}:${opts.port ?? 3e3}`;
-	consola.start(`Starting cloudflared tunnel to ${url}`);
-	if (!(0, node_fs.existsSync)(cloudflaredBinPath)) {
-		consola.log(cloudflaredNotice);
-		if (!(opts.acceptCloudflareNotice || process.env.UNTUN_ACCEPT_CLOUDFLARE_NOTICE || await consola.prompt(`Do you agree with the above terms and wish to install the binary from GitHub?`, { type: "confirm" }))) {
-			consola.fail("Skipping tunnel setup.");
-			return;
-		}
-		await installCloudflared();
-	}
-	const args = [["--url", url], opts.verifyTLS ? void 0 : ["--no-tls-verify", ""]].filter(Boolean);
-	const tunnel = await startCloudflaredTunnel(Object.fromEntries(args));
-	const cleanup = async () => {
-		await tunnel.stop();
-	};
-	for (const signal of [
-		"SIGINT",
-		"SIGUSR1",
-		"SIGUSR2"
-	]) process.once(signal, cleanup);
-	return {
-		getURL: async () => await tunnel.url,
-		close: async () => {
-			await cleanup();
-		}
-	};
-}
-//#endregion
-//#region src/main/services/wormhole.ts
-var activeTunnel = null;
-function registerWormhole({ ipcMain }) {
-	ipcMain.handle("open-wormhole", async (_event, port) => {
-		try {
-			if (activeTunnel) {
-				await activeTunnel.close();
-				activeTunnel = null;
-			}
-			activeTunnel = await startTunnel({
-				port,
-				acceptCloudflareNotice: true
-			});
-			return {
-				success: true,
-				url: await activeTunnel.getURL(),
-				password: null
-			};
-		} catch (err) {
-			return {
-				success: false,
-				error: String(err)
-			};
-		}
-	});
-	ipcMain.handle("close-wormhole", async () => {
-		if (activeTunnel) {
-			await activeTunnel.close();
-			activeTunnel = null;
-		}
-		return { success: true };
-	});
-}
-//#endregion
-//#region src/main/services/RAG-oracle.ts
-var getStateDir = () => path.default.join(electron.app.getPath("userData"), "iris_scan_states");
-var getStateFilePath = (dirPath) => {
-	const hash = crypto$1.default.createHash("md5").update(path.default.normalize(dirPath)).digest("hex");
-	return path.default.join(getStateDir(), `${hash}.json`);
-};
-var saveState = async (state) => {
-	try {
-		await fs_promises.default.mkdir(getStateDir(), { recursive: true });
-		await fs_promises.default.writeFile(getStateFilePath(state.dirPath), JSON.stringify(state, null, 2));
-	} catch (e) {}
-};
-var loadState = async (dirPath) => {
-	try {
-		await fs_promises.default.mkdir(getStateDir(), { recursive: true });
-		const data = await fs_promises.default.readFile(getStateFilePath(dirPath), "utf-8");
-		return JSON.parse(data);
-	} catch {
-		return null;
-	}
-};
-var vectorDB = [];
-var processedFiles = /* @__PURE__ */ new Set();
-var isCancelled = false;
-var cosineSimilarity = (vecA, vecB) => {
-	let dot = 0, normA = 0, normB = 0;
-	for (let i = 0; i < vecA.length; i++) {
-		dot += vecA[i] * vecB[i];
-		normA += vecA[i] * vecA[i];
-		normB += vecB[i] * vecB[i];
-	}
-	return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-};
-var sleep$1 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-function registerOracle({ ipcMain }) {
-	ipcMain.handle("cancel-ingestion", () => {
-		isCancelled = true;
-		return { success: true };
-	});
-	ipcMain.handle("ingest-codebase", async (event, { dirPath, geminiKey }) => {
-		try {
-			if (!geminiKey) throw new Error("Missing Gemini API Key. Please configure it in the Command Center Vault.");
-			const targetPath = path.default.normalize(dirPath.trim());
-			isCancelled = false;
-			const ai = new GoogleGenAI({ apiKey: geminiKey });
-			const prevState = await loadState(targetPath);
-			if (prevState) {
-				vectorDB = prevState.vectorDB;
-				processedFiles = new Set(prevState.processedFiles);
-			} else {
-				vectorDB = [];
-				processedFiles = /* @__PURE__ */ new Set();
-			}
-			const ignoreDirs = [
-				"node_modules",
-				".git",
-				"dist",
-				"build",
-				".next",
-				"out",
-				"public"
-			];
-			const ignoreFiles = [
-				"package-lock.json",
-				"yarn.lock",
-				"pnpm-lock.yaml",
-				"package.json",
-				"tsconfig.json"
-			];
-			const allowedExts = [
-				".js",
-				".ts",
-				".jsx",
-				".tsx",
-				".py",
-				".md"
-			];
-			let allFiles = [];
-			async function fastScan(currentPath) {
-				if (isCancelled) return;
-				let entries;
-				try {
-					entries = await fs_promises.default.readdir(currentPath, { withFileTypes: true });
-				} catch {
-					return;
-				}
-				for (const entry of entries) {
-					const fullPath = path.default.join(currentPath, entry.name);
-					if (entry.isDirectory() && !ignoreDirs.includes(entry.name)) await fastScan(fullPath);
-					else if (entry.isFile() && allowedExts.includes(path.default.extname(entry.name)) && !ignoreFiles.includes(entry.name)) allFiles.push(fullPath);
-				}
-			}
-			event.sender.send("oracle-progress", {
-				status: "scanning",
-				file: "Initializing...",
-				totalFound: 0
-			});
-			await fastScan(targetPath);
-			if (isCancelled) return {
-				success: false,
-				error: "Aborted by user."
-			};
-			const filesToProcess = allFiles.filter((f) => !processedFiles.has(f));
-			const filesWithStats = await Promise.all(filesToProcess.map(async (f) => ({
-				path: f,
-				size: (await fs_promises.default.stat(f)).size
-			})));
-			filesWithStats.sort((a, b) => a.size - b.size);
-			const sortedFilesToProcess = filesWithStats.map((f) => f.path);
-			event.sender.send("oracle-progress", {
-				status: "scanning",
-				file: "Scan Complete",
-				totalFound: allFiles.length,
-				filesProcessed: processedFiles.size,
-				chunks: vectorDB.length
-			});
-			for (let i = 0; i < sortedFilesToProcess.length; i++) {
-				if (isCancelled) {
-					event.sender.send("oracle-progress", { status: "cancelled" });
-					break;
-				}
-				const fullPath = sortedFilesToProcess[i];
-				const fileName = path.default.basename(fullPath);
-				event.sender.send("oracle-progress", {
-					status: "reading",
-					file: fileName,
-					filesProcessed: processedFiles.size,
-					totalFiles: allFiles.length,
-					chunks: vectorDB.length
-				});
-				if ((await fs_promises.default.stat(fullPath)).size > 1e5) continue;
-				const validChunks = ((await fs_promises.default.readFile(fullPath, "utf-8")).match(/[\s\S]{1,1500}/g) || []).filter((c) => c.trim().length > 10);
-				if (validChunks.length === 0) {
-					processedFiles.add(fullPath);
-					continue;
-				}
-				try {
-					(await ai.models.embedContent({
-						model: "gemini-embedding-001",
-						contents: validChunks.map((chunk) => `File: ${fileName}\n\n${chunk}`),
-						config: { taskType: "RETRIEVAL_DOCUMENT" }
-					})).embeddings.forEach((emb, idx) => {
-						vectorDB.push({
-							filePath: fullPath,
-							chunk: validChunks[idx],
-							embedding: emb.values
-						});
-					});
-					processedFiles.add(fullPath);
-					await saveState({
-						dirPath: targetPath,
-						processedFiles: Array.from(processedFiles),
-						vectorDB
-					});
-					event.sender.send("oracle-progress", {
-						status: "embedded",
-						file: fileName,
-						filesProcessed: processedFiles.size,
-						totalFiles: allFiles.length,
-						chunks: vectorDB.length
-					});
-					await sleep$1(3500);
-				} catch (apiError) {
-					await sleep$1(5e3);
-				}
-			}
-			return {
-				success: true,
-				totalChunks: vectorDB.length,
-				wasResumed: !!prevState
-			};
-		} catch (err) {
-			return {
-				success: false,
-				error: String(err)
-			};
-		}
-	});
-	ipcMain.handle("consult-oracle", async (_event, { query, geminiKey, groqKey }) => {
-		try {
-			if (vectorDB.length === 0) return {
-				success: false,
-				answer: "Error: No files loaded into memory."
-			};
-			if (!geminiKey || !groqKey) throw new Error("Missing API Keys. Ensure both Gemini and Groq are configured in Settings.");
-			const ai = new GoogleGenAI({ apiKey: geminiKey });
-			const groq = new Groq({ apiKey: groqKey });
-			const queryEmbedding = (await ai.models.embedContent({
-				model: "gemini-embedding-001",
-				contents: query,
-				config: { taskType: "RETRIEVAL_QUERY" }
-			})).embeddings[0].values;
-			const rankedChunks = vectorDB.map((item) => ({
-				...item,
-				score: cosineSimilarity(queryEmbedding, item.embedding)
-			})).sort((a, b) => b.score - a.score).slice(0, 3);
-			const contextText = rankedChunks.map((c) => `// File: ${c.filePath}\n${c.chunk}`).join("\n\n");
-			return {
-				success: true,
-				answer: (await groq.chat.completions.create({
-					messages: [{
-						role: "system",
-						content: "You are an elite coding assistant. Answer the user's question based ONLY on the provided codebase context. Give direct code snippets and explanations. Be concise."
-					}, {
-						role: "user",
-						content: `Context:\n${contextText}\n\nQuestion: ${query}`
-					}],
-					model: "llama-3.1-8b-instant"
-				})).choices[0].message.content,
-				scannedFiles: rankedChunks.map((c) => c.filePath)
-			};
-		} catch (err) {
-			return {
-				success: false,
-				error: String(err)
-			};
-		}
-	});
-}
-//#endregion
 //#region node_modules/axios/lib/helpers/bind.js
 /**
 * Create a bound version of a function with a specified `this` context
@@ -74348,7 +73736,7 @@ var isBoolean = (thing) => thing === true || thing === false;
 *
 * @returns {boolean} True if value is a plain Object, otherwise false
 */
-var isPlainObject = (val) => {
+var isPlainObject$2 = (val) => {
 	if (kindOf(val) !== "object") return false;
 	const prototype = getPrototypeOf(val);
 	return (prototype === null || prototype === Object.prototype || Object.getPrototypeOf(prototype) === null) && !(toStringTag in val) && !(iterator in val);
@@ -74445,8 +73833,8 @@ function getGlobal() {
 	if (typeof global !== "undefined") return global;
 	return {};
 }
-var G = getGlobal();
-var FormDataCtor = typeof G.FormData !== "undefined" ? G.FormData : void 0;
+var G$1 = getGlobal();
+var FormDataCtor = typeof G$1.FormData !== "undefined" ? G$1.FormData : void 0;
 var isFormData = (thing) => {
 	if (!thing) return false;
 	if (FormDataCtor && thing instanceof FormDataCtor) return true;
@@ -74563,8 +73951,8 @@ function merge(...objs) {
 		if (key === "__proto__" || key === "constructor" || key === "prototype") return;
 		const targetKey = caseless && findKey(result, key) || key;
 		const existing = hasOwnProperty(result, targetKey) ? result[targetKey] : void 0;
-		if (isPlainObject(existing) && isPlainObject(val)) result[targetKey] = merge(existing, val);
-		else if (isPlainObject(val)) result[targetKey] = merge({}, val);
+		if (isPlainObject$2(existing) && isPlainObject$2(val)) result[targetKey] = merge(existing, val);
+		else if (isPlainObject$2(val)) result[targetKey] = merge({}, val);
 		else if (isArray(val)) result[targetKey] = val.slice();
 		else if (!skipUndefined || !isUndefined(val)) result[targetKey] = val;
 	};
@@ -74899,7 +74287,7 @@ var utils_default = {
 	isNumber,
 	isBoolean,
 	isObject,
-	isPlainObject,
+	isPlainObject: isPlainObject$2,
 	isEmptyObject,
 	isReadableStream,
 	isRequest,
@@ -83709,16 +83097,18 @@ var require_populate = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 		return dst;
 	};
 }));
-var FormData_default = (/* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin(((exports, module) => {
+//#endregion
+//#region node_modules/form-data/lib/form_data.js
+var require_form_data = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 	var CombinedStream = require_combined_stream();
 	var util$4 = require("util");
-	var path$9 = require("path");
+	var path$12 = require("path");
 	var http$5 = require("http");
 	var https$4 = require("https");
 	var parseUrl$1 = require("url").parse;
-	var fs$9 = require("fs");
+	var fs$12 = require("fs");
 	var Stream = require("stream").Stream;
-	var crypto$3 = require("crypto");
+	var crypto$4 = require("crypto");
 	var mime = require_mime_types();
 	var asynckit = require_asynckit();
 	var setToStringTag = require_es_set_tostringtag();
@@ -83772,7 +83162,7 @@ var FormData_default = (/* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin((
 	};
 	FormData.prototype._lengthRetriever = function(value, callback) {
 		if (hasOwn(value, "fd")) if (value.end != void 0 && value.end != Infinity && value.start != void 0) callback(null, value.end + 1 - (value.start ? value.start : 0));
-		else fs$9.stat(value.path, function(err, stat) {
+		else fs$12.stat(value.path, function(err, stat) {
 			if (err) {
 				callback(err);
 				return;
@@ -83809,9 +83199,9 @@ var FormData_default = (/* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin((
 	};
 	FormData.prototype._getContentDisposition = function(value, options) {
 		var filename;
-		if (typeof options.filepath === "string") filename = path$9.normalize(options.filepath).replace(/\\/g, "/");
-		else if (options.filename || value && (value.name || value.path)) filename = path$9.basename(options.filename || value && (value.name || value.path));
-		else if (value && value.readable && hasOwn(value, "httpVersion")) filename = path$9.basename(value.client._httpMessage.path || "");
+		if (typeof options.filepath === "string") filename = path$12.normalize(options.filepath).replace(/\\/g, "/");
+		else if (options.filename || value && (value.name || value.path)) filename = path$12.basename(options.filename || value && (value.name || value.path));
+		else if (value && value.readable && hasOwn(value, "httpVersion")) filename = path$12.basename(value.client._httpMessage.path || "");
 		if (filename) return "filename=\"" + filename + "\"";
 	};
 	FormData.prototype._getContentType = function(value, options) {
@@ -83858,7 +83248,7 @@ var FormData_default = (/* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin((
 		return Buffer.concat([dataBuffer, Buffer.from(this._lastBoundary())]);
 	};
 	FormData.prototype._generateBoundary = function() {
-		this._boundary = "--------------------------" + crypto$3.randomBytes(12).toString("hex");
+		this._boundary = "--------------------------" + crypto$4.randomBytes(12).toString("hex");
 	};
 	FormData.prototype.getLengthSync = function() {
 		var knownLength = this._overheadLength + this._valueLength;
@@ -83941,7 +83331,8 @@ var FormData_default = (/* @__PURE__ */ __toESM((/* @__PURE__ */ __commonJSMin((
 	};
 	setToStringTag(FormData.prototype, "FormData");
 	module.exports = FormData;
-})))(), 1)).default;
+}));
+var FormData_default = (/* @__PURE__ */ __toESM(require_form_data(), 1)).default;
 //#endregion
 //#region node_modules/axios/lib/helpers/toFormData.js
 /**
@@ -85220,7 +84611,7 @@ var require_has_flag = /* @__PURE__ */ __commonJSMin(((exports, module) => {
 //#endregion
 //#region node_modules/supports-color/index.js
 var require_supports_color = /* @__PURE__ */ __commonJSMin(((exports, module) => {
-	var os$1 = require("os");
+	var os$3 = require("os");
 	var tty$1 = require("tty");
 	var hasFlag = require_has_flag();
 	var { env } = process;
@@ -85247,7 +84638,7 @@ var require_supports_color = /* @__PURE__ */ __commonJSMin(((exports, module) =>
 		const min = forceColor || 0;
 		if (env.TERM === "dumb") return min;
 		if (process.platform === "win32") {
-			const osRelease = os$1.release().split(".");
+			const osRelease = os$3.release().split(".");
 			if (Number(osRelease[0]) >= 10 && Number(osRelease[2]) >= 10586) return Number(osRelease[2]) >= 14931 ? 3 : 2;
 			return 1;
 		}
@@ -88745,6 +88136,1672 @@ axios.default = axios;
 //#region node_modules/axios/index.js
 var { Axios, AxiosError, CanceledError, isCancel, CancelToken, VERSION, all, Cancel, isAxiosError, spread, toFormData, AxiosHeaders, HttpStatusCode, formToJSON, getAdapter, mergeConfig, create } = axios;
 //#endregion
+//#region src/main/services/iris-coder.ts
+var HAPUPPY_BASE$3 = "https://beta.hapuppy.com/v1/chat/completions";
+var MODEL_CODE$1 = "qwen3-coder-480b-a35b-instruct";
+var CODE_TIMEOUT = 18e4;
+function registerIrisCoder({ ipcMain, app }) {
+	const PROJECTS_DIR = path.default.resolve(app.getPath("userData"), "Projects");
+	if (!fs.default.existsSync(PROJECTS_DIR)) fs.default.mkdirSync(PROJECTS_DIR, { recursive: true });
+	ipcMain.handle("start-live-coding", async (event, { prompt, filename, geminiKey }) => {
+		const filePath = path.default.join(PROJECTS_DIR, filename);
+		try {
+			fs.default.writeFileSync(filePath, "// Boss, connection established. Waiting for AI stream...\n");
+			if (geminiKey && geminiKey.trim() !== "") {
+				const result = await tryGemini(prompt, filename, filePath, geminiKey, event);
+				if (result.success) return result;
+				console.warn("[IRIS Coder] ⚠️ Gemini failed → switching to Hapuppy qwen-coder");
+			} else console.log("[IRIS Coder] ℹ️ No Gemini key → using Hapuppy qwen-coder");
+			return await tryHapuppyCoder(prompt, filename, filePath, event);
+		} catch (err) {
+			const errMsg = String(err?.message || err);
+			console.error("[IRIS Coder] ❌ Total failure:", errMsg);
+			event.sender.send("live-code-chunk", `\n\n❌ [SYSTEM FAILURE]: ${errMsg}`);
+			return {
+				success: false,
+				error: errMsg
+			};
+		}
+	});
+	ipcMain.handle("open-in-vscode", async (_event, filePath) => {
+		try {
+			(0, child_process.exec)(`code "${filePath}"`);
+			return { success: true };
+		} catch (err) {
+			return {
+				success: false,
+				error: String(err)
+			};
+		}
+	});
+}
+async function tryGemini(prompt, filename, filePath, geminiKey, event) {
+	try {
+		console.log("[IRIS Coder] 🅰️ Using Gemini-3-flash-preview...");
+		const response = await new GoogleGenAI({ apiKey: geminiKey }).models.generateContentStream({
+			model: "gemini-3-flash-preview",
+			contents: `You are an elite developer. Write the code for: "${prompt}". Output ONLY the raw code for the file ${filename}. Do NOT wrap it in markdown blockquotes.`
+		});
+		let fullCode = "";
+		for await (const chunk of response) if (chunk.text) {
+			fullCode += chunk.text;
+			event.sender.send("live-code-chunk", chunk.text);
+		}
+		if (!fullCode.trim()) throw new Error("Gemini returned empty response");
+		fs.default.writeFileSync(filePath, fullCode);
+		console.log("[IRIS Coder] ✅ Gemini succeeded");
+		return {
+			success: true,
+			filePath
+		};
+	} catch (err) {
+		const errMsg = String(err?.message || err);
+		console.warn("[IRIS Coder] ❌ Gemini failed:", errMsg);
+		return {
+			success: false,
+			error: errMsg
+		};
+	}
+}
+async function tryHapuppyCoder(prompt, filename, filePath, event) {
+	try {
+		console.log("[IRIS Coder] 🅱️ Using Hapuppy qwen3-coder-480b...");
+		const hapuppyKey = (process.env.HAPUPPY_API_KEY || "").trim();
+		if (!hapuppyKey) throw new Error("HAPUPPY_API_KEY missing in .env");
+		const response = await axios.post(HAPUPPY_BASE$3, {
+			model: MODEL_CODE$1,
+			messages: [{
+				role: "system",
+				content: `You are an elite 10x developer. Write clean, optimized, production-ready code. Output ONLY raw code — no markdown blockquotes, no explanations.`
+			}, {
+				role: "user",
+				content: `Write the code for: "${prompt}". The file is named ${filename}. Output ONLY the raw code.`
+			}],
+			temperature: .3,
+			max_tokens: 4096,
+			stream: true
+		}, {
+			timeout: CODE_TIMEOUT,
+			headers: {
+				Authorization: `Bearer ${hapuppyKey}`,
+				"Content-Type": "application/json"
+			},
+			responseType: "stream"
+		});
+		let fullCode = "";
+		await new Promise((resolve, reject) => {
+			let buffer = "";
+			response.data.on("data", (chunk) => {
+				buffer += chunk.toString();
+				const lines = buffer.split("\n");
+				buffer = lines.pop() || "";
+				for (const line of lines) {
+					const trimmed = line.trim();
+					if (!trimmed || !trimmed.startsWith("data: ")) continue;
+					const data = trimmed.slice(6);
+					if (data === "[DONE]") {
+						resolve();
+						return;
+					}
+					try {
+						const content = JSON.parse(data)?.choices?.[0]?.delta?.content || "";
+						if (content) {
+							fullCode += content;
+							event.sender.send("live-code-chunk", content);
+						}
+					} catch {}
+				}
+			});
+			response.data.on("end", () => resolve());
+			response.data.on("error", (err) => reject(err));
+		});
+		if (!fullCode.trim()) throw new Error("Hapuppy qwen-coder returned empty response");
+		fullCode = fullCode.replace(/^```[\w]*\n/, "").replace(/\n```$/, "").trim();
+		fs.default.writeFileSync(filePath, fullCode);
+		console.log("[IRIS Coder] ✅ Hapuppy qwen-coder succeeded");
+		return {
+			success: true,
+			filePath
+		};
+	} catch (err) {
+		const errMsg = err?.response?.data?.error?.message || err?.message || String(err);
+		console.error("[IRIS Coder] ❌ Hapuppy qwen-coder failed:", errMsg);
+		event.sender.send("live-code-chunk", `\n\n❌ [HAPUPPY FAILURE]: ${errMsg}`);
+		return {
+			success: false,
+			error: errMsg
+		};
+	}
+}
+//#endregion
+//#region src/main/logic/telekinesis.ts
+var runCommand = (cmd) => {
+	return new Promise((resolve) => {
+		(0, child_process.exec)(cmd, (err, stdout) => {
+			resolve(err ? "" : stdout.trim());
+		});
+	});
+};
+function registerTelekinesis({ ipcMain }) {
+	ipcMain.handle("teleport-windows", async (_event, commands) => {
+		try {
+			if (os.default.platform() === "linux") return await handleLinuxTeleport(commands);
+			node_window_manager.windowManager.requestAccessibility();
+			const { width, height, x: screenX, y: screenY } = electron.screen.getPrimaryDisplay().workArea;
+			const openWindows = node_window_manager.windowManager.getWindows();
+			for (const cmd of commands) {
+				const targetWindow = openWindows.filter((w) => w.isWindow() && w.isVisible() && w.getTitle() !== "" && (w.getTitle().toLowerCase().includes(cmd.appName.toLowerCase()) || w.path.toLowerCase().includes(cmd.appName.toLowerCase())))[0];
+				if (targetWindow) {
+					targetWindow.restore();
+					targetWindow.bringToTop();
+					const halfW = Math.floor(width / 2);
+					const halfH = Math.floor(height / 2);
+					let newBounds = {
+						x: screenX,
+						y: screenY,
+						width,
+						height
+					};
+					switch (cmd.position) {
+						case "left":
+							newBounds = {
+								x: screenX,
+								y: screenY,
+								width: halfW,
+								height
+							};
+							break;
+						case "right":
+							newBounds = {
+								x: screenX + halfW,
+								y: screenY,
+								width: halfW,
+								height
+							};
+							break;
+						case "top-left":
+							newBounds = {
+								x: screenX,
+								y: screenY,
+								width: halfW,
+								height: halfH
+							};
+							break;
+						case "bottom-left":
+							newBounds = {
+								x: screenX,
+								y: screenY + halfH,
+								width: halfW,
+								height: halfH
+							};
+							break;
+						case "top-right":
+							newBounds = {
+								x: screenX + halfW,
+								y: screenY,
+								width: halfW,
+								height: halfH
+							};
+							break;
+						case "bottom-right":
+							newBounds = {
+								x: screenX + halfW,
+								y: screenY + halfH,
+								width: halfW,
+								height: halfH
+							};
+							break;
+						case "maximize":
+							targetWindow.maximize();
+							continue;
+					}
+					targetWindow.setBounds(newBounds);
+				}
+			}
+			return { success: true };
+		} catch (err) {
+			return {
+				success: false,
+				error: String(err)
+			};
+		}
+	});
+}
+async function handleLinuxTeleport(commands) {
+	try {
+		const { width, height, x: screenX, y: screenY } = electron.screen.getPrimaryDisplay().workArea;
+		if (!await runCommand("which wmctrl")) return {
+			success: false,
+			error: "wmctrl is not installed. Run: sudo apt install wmctrl"
+		};
+		const windowList = await runCommand("wmctrl -lx 2>/dev/null");
+		if (!windowList) return {
+			success: false,
+			error: "No windows found or wmctrl failed"
+		};
+		const openWindows = parseWmctrlOutput(windowList);
+		for (const cmd of commands) {
+			const appNameLower = cmd.appName.toLowerCase();
+			const targetWindow = openWindows.find((w) => w.title.toLowerCase().includes(appNameLower) || w.wmClass.toLowerCase().includes(appNameLower));
+			if (targetWindow) {
+				await runCommand(`wmctrl -ir ${targetWindow.id} -b remove,hidden`);
+				await runCommand(`wmctrl -ia ${targetWindow.id}`);
+				await runCommand(`wmctrl -ir ${targetWindow.id} -b remove,maximized_vert,maximized_horz`);
+				const halfW = Math.floor(width / 2);
+				const halfH = Math.floor(height / 2);
+				let newBounds = {
+					x: screenX,
+					y: screenY,
+					width,
+					height
+				};
+				switch (cmd.position) {
+					case "left":
+						newBounds = {
+							x: screenX,
+							y: screenY,
+							width: halfW,
+							height
+						};
+						break;
+					case "right":
+						newBounds = {
+							x: screenX + halfW,
+							y: screenY,
+							width: halfW,
+							height
+						};
+						break;
+					case "top-left":
+						newBounds = {
+							x: screenX,
+							y: screenY,
+							width: halfW,
+							height: halfH
+						};
+						break;
+					case "bottom-left":
+						newBounds = {
+							x: screenX,
+							y: screenY + halfH,
+							width: halfW,
+							height: halfH
+						};
+						break;
+					case "top-right":
+						newBounds = {
+							x: screenX + halfW,
+							y: screenY,
+							width: halfW,
+							height: halfH
+						};
+						break;
+					case "bottom-right":
+						newBounds = {
+							x: screenX + halfW,
+							y: screenY + halfH,
+							width: halfW,
+							height: halfH
+						};
+						break;
+					case "maximize":
+						await runCommand(`wmctrl -ir ${targetWindow.id} -b add,maximized_vert,maximized_horz`);
+						continue;
+				}
+				await runCommand(`wmctrl -ir ${targetWindow.id} -e 0,${newBounds.x},${newBounds.y},${newBounds.width},${newBounds.height}`);
+			}
+		}
+		return { success: true };
+	} catch (err) {
+		return {
+			success: false,
+			error: String(err)
+		};
+	}
+}
+function parseWmctrlOutput(output) {
+	return output.split("\n").map((line) => {
+		const parts = line.trim().split(/\s+/);
+		if (parts.length < 5) return null;
+		return {
+			id: parts[0],
+			desktop: parts[1],
+			wmClass: parts[2],
+			host: parts[3],
+			title: parts.slice(4).join(" ")
+		};
+	}).filter((w) => w !== null && w.title !== "");
+}
+//#endregion
+//#region src/main/logic/permanent-memory.ts
+function registerPermanentMemory({ ipcMain, app }) {
+	const MEMORY_DIR = path.default.resolve(app.getPath("userData"), "Memory");
+	const FILE_PATH = path.default.join(MEMORY_DIR, "saved-user-memory.json");
+	if (!fs.default.existsSync(MEMORY_DIR)) fs.default.mkdirSync(MEMORY_DIR, { recursive: true });
+	ipcMain.handle("save-core-memory", async (_event, fact) => {
+		try {
+			let memoryBank = [];
+			if (fs.default.existsSync(FILE_PATH)) {
+				const data = fs.default.readFileSync(FILE_PATH, "utf-8");
+				memoryBank = data ? JSON.parse(data) : [];
+			}
+			memoryBank.push({
+				fact,
+				timestamp: (/* @__PURE__ */ new Date()).toISOString()
+			});
+			fs.default.writeFileSync(FILE_PATH, JSON.stringify(memoryBank, null, 2));
+			return true;
+		} catch (err) {
+			return false;
+		}
+	});
+	ipcMain.handle("search-core-memory", async () => {
+		try {
+			if (fs.default.existsSync(FILE_PATH)) {
+				const data = fs.default.readFileSync(FILE_PATH, "utf-8");
+				return data ? JSON.parse(data) : [];
+			}
+			return [];
+		} catch (err) {
+			return [];
+		}
+	});
+}
+//#endregion
+//#region node_modules/consola/dist/core.mjs
+var LogLevels = {
+	silent: Number.NEGATIVE_INFINITY,
+	fatal: 0,
+	error: 0,
+	warn: 1,
+	log: 2,
+	info: 3,
+	success: 3,
+	fail: 3,
+	ready: 3,
+	start: 3,
+	box: 3,
+	debug: 4,
+	trace: 5,
+	verbose: Number.POSITIVE_INFINITY
+};
+var LogTypes = {
+	silent: { level: -1 },
+	fatal: { level: LogLevels.fatal },
+	error: { level: LogLevels.error },
+	warn: { level: LogLevels.warn },
+	log: { level: LogLevels.log },
+	info: { level: LogLevels.info },
+	success: { level: LogLevels.success },
+	fail: { level: LogLevels.fail },
+	ready: { level: LogLevels.info },
+	start: { level: LogLevels.info },
+	box: { level: LogLevels.info },
+	debug: { level: LogLevels.debug },
+	trace: { level: LogLevels.trace },
+	verbose: { level: LogLevels.verbose }
+};
+function isPlainObject$1(value) {
+	if (value === null || typeof value !== "object") return false;
+	const prototype = Object.getPrototypeOf(value);
+	if (prototype !== null && prototype !== Object.prototype && Object.getPrototypeOf(prototype) !== null) return false;
+	if (Symbol.iterator in value) return false;
+	if (Symbol.toStringTag in value) return Object.prototype.toString.call(value) === "[object Module]";
+	return true;
+}
+function _defu(baseObject, defaults, namespace = ".", merger) {
+	if (!isPlainObject$1(defaults)) return _defu(baseObject, {}, namespace, merger);
+	const object = Object.assign({}, defaults);
+	for (const key in baseObject) {
+		if (key === "__proto__" || key === "constructor") continue;
+		const value = baseObject[key];
+		if (value === null || value === void 0) continue;
+		if (merger && merger(object, key, value, namespace)) continue;
+		if (Array.isArray(value) && Array.isArray(object[key])) object[key] = [...value, ...object[key]];
+		else if (isPlainObject$1(value) && isPlainObject$1(object[key])) object[key] = _defu(value, object[key], (namespace ? `${namespace}.` : "") + key.toString(), merger);
+		else object[key] = value;
+	}
+	return object;
+}
+function createDefu(merger) {
+	return (...arguments_) => arguments_.reduce((p, c) => _defu(p, c, "", merger), {});
+}
+var defu = createDefu();
+function isPlainObject(obj) {
+	return Object.prototype.toString.call(obj) === "[object Object]";
+}
+function isLogObj(arg) {
+	if (!isPlainObject(arg)) return false;
+	if (!arg.message && !arg.args) return false;
+	if (arg.stack) return false;
+	return true;
+}
+var paused = false;
+var queue = [];
+var Consola = class Consola {
+	options;
+	_lastLog;
+	_mockFn;
+	/**
+	* Creates an instance of Consola with specified options or defaults.
+	*
+	* @param {Partial<ConsolaOptions>} [options={}] - Configuration options for the Consola instance.
+	*/
+	constructor(options = {}) {
+		const types = options.types || LogTypes;
+		this.options = defu({
+			...options,
+			defaults: { ...options.defaults },
+			level: _normalizeLogLevel(options.level, types),
+			reporters: [...options.reporters || []]
+		}, {
+			types: LogTypes,
+			throttle: 1e3,
+			throttleMin: 5,
+			formatOptions: {
+				date: true,
+				colors: false,
+				compact: true
+			}
+		});
+		for (const type in types) {
+			const defaults = {
+				type,
+				...this.options.defaults,
+				...types[type]
+			};
+			this[type] = this._wrapLogFn(defaults);
+			this[type].raw = this._wrapLogFn(defaults, true);
+		}
+		if (this.options.mockFn) this.mockTypes();
+		this._lastLog = {};
+	}
+	/**
+	* Gets the current log level of the Consola instance.
+	*
+	* @returns {number} The current log level.
+	*/
+	get level() {
+		return this.options.level;
+	}
+	/**
+	* Sets the minimum log level that will be output by the instance.
+	*
+	* @param {number} level - The new log level to set.
+	*/
+	set level(level) {
+		this.options.level = _normalizeLogLevel(level, this.options.types, this.options.level);
+	}
+	/**
+	* Displays a prompt to the user and returns the response.
+	* Throw an error if `prompt` is not supported by the current configuration.
+	*
+	* @template T
+	* @param {string} message - The message to display in the prompt.
+	* @param {T} [opts] - Optional options for the prompt. See {@link PromptOptions}.
+	* @returns {promise<T>} A promise that infer with the prompt options. See {@link PromptOptions}.
+	*/
+	prompt(message, opts) {
+		if (!this.options.prompt) throw new Error("prompt is not supported!");
+		return this.options.prompt(message, opts);
+	}
+	/**
+	* Creates a new instance of Consola, inheriting options from the current instance, with possible overrides.
+	*
+	* @param {Partial<ConsolaOptions>} options - Optional overrides for the new instance. See {@link ConsolaOptions}.
+	* @returns {ConsolaInstance} A new Consola instance. See {@link ConsolaInstance}.
+	*/
+	create(options) {
+		const instance = new Consola({
+			...this.options,
+			...options
+		});
+		if (this._mockFn) instance.mockTypes(this._mockFn);
+		return instance;
+	}
+	/**
+	* Creates a new Consola instance with the specified default log object properties.
+	*
+	* @param {InputLogObject} defaults - Default properties to include in any log from the new instance. See {@link InputLogObject}.
+	* @returns {ConsolaInstance} A new Consola instance. See {@link ConsolaInstance}.
+	*/
+	withDefaults(defaults) {
+		return this.create({
+			...this.options,
+			defaults: {
+				...this.options.defaults,
+				...defaults
+			}
+		});
+	}
+	/**
+	* Creates a new Consola instance with a specified tag, which will be included in every log.
+	*
+	* @param {string} tag - The tag to include in each log of the new instance.
+	* @returns {ConsolaInstance} A new Consola instance. See {@link ConsolaInstance}.
+	*/
+	withTag(tag) {
+		return this.withDefaults({ tag: this.options.defaults.tag ? this.options.defaults.tag + ":" + tag : tag });
+	}
+	/**
+	* Adds a custom reporter to the Consola instance.
+	* Reporters will be called for each log message, depending on their implementation and log level.
+	*
+	* @param {ConsolaReporter} reporter - The reporter to add. See {@link ConsolaReporter}.
+	* @returns {Consola} The current Consola instance.
+	*/
+	addReporter(reporter) {
+		this.options.reporters.push(reporter);
+		return this;
+	}
+	/**
+	* Removes a custom reporter from the Consola instance.
+	* If no reporter is specified, all reporters will be removed.
+	*
+	* @param {ConsolaReporter} reporter - The reporter to remove. See {@link ConsolaReporter}.
+	* @returns {Consola} The current Consola instance.
+	*/
+	removeReporter(reporter) {
+		if (reporter) {
+			const i = this.options.reporters.indexOf(reporter);
+			if (i !== -1) return this.options.reporters.splice(i, 1);
+		} else this.options.reporters.splice(0);
+		return this;
+	}
+	/**
+	* Replaces all reporters of the Consola instance with the specified array of reporters.
+	*
+	* @param {ConsolaReporter[]} reporters - The new reporters to set. See {@link ConsolaReporter}.
+	* @returns {Consola} The current Consola instance.
+	*/
+	setReporters(reporters) {
+		this.options.reporters = Array.isArray(reporters) ? reporters : [reporters];
+		return this;
+	}
+	wrapAll() {
+		this.wrapConsole();
+		this.wrapStd();
+	}
+	restoreAll() {
+		this.restoreConsole();
+		this.restoreStd();
+	}
+	/**
+	* Overrides console methods with Consola logging methods for consistent logging.
+	*/
+	wrapConsole() {
+		for (const type in this.options.types) {
+			if (!console["__" + type]) console["__" + type] = console[type];
+			console[type] = this[type].raw;
+		}
+	}
+	/**
+	* Restores the original console methods, removing Consola overrides.
+	*/
+	restoreConsole() {
+		for (const type in this.options.types) if (console["__" + type]) {
+			console[type] = console["__" + type];
+			delete console["__" + type];
+		}
+	}
+	/**
+	* Overrides standard output and error streams to redirect them through Consola.
+	*/
+	wrapStd() {
+		this._wrapStream(this.options.stdout, "log");
+		this._wrapStream(this.options.stderr, "log");
+	}
+	_wrapStream(stream, type) {
+		if (!stream) return;
+		if (!stream.__write) stream.__write = stream.write;
+		stream.write = (data) => {
+			this[type].raw(String(data).trim());
+		};
+	}
+	/**
+	* Restores the original standard output and error streams, removing the Consola redirection.
+	*/
+	restoreStd() {
+		this._restoreStream(this.options.stdout);
+		this._restoreStream(this.options.stderr);
+	}
+	_restoreStream(stream) {
+		if (!stream) return;
+		if (stream.__write) {
+			stream.write = stream.__write;
+			delete stream.__write;
+		}
+	}
+	/**
+	* Pauses logging, queues incoming logs until resumed.
+	*/
+	pauseLogs() {
+		paused = true;
+	}
+	/**
+	* Resumes logging, processing any queued logs.
+	*/
+	resumeLogs() {
+		paused = false;
+		const _queue = queue.splice(0);
+		for (const item of _queue) item[0]._logFn(item[1], item[2]);
+	}
+	/**
+	* Replaces logging methods with mocks if a mock function is provided.
+	*
+	* @param {ConsolaOptions["mockFn"]} mockFn - The function to use for mocking logging methods. See {@link ConsolaOptions["mockFn"]}.
+	*/
+	mockTypes(mockFn) {
+		const _mockFn = mockFn || this.options.mockFn;
+		this._mockFn = _mockFn;
+		if (typeof _mockFn !== "function") return;
+		for (const type in this.options.types) {
+			this[type] = _mockFn(type, this.options.types[type]) || this[type];
+			this[type].raw = this[type];
+		}
+	}
+	_wrapLogFn(defaults, isRaw) {
+		return (...args) => {
+			if (paused) {
+				queue.push([
+					this,
+					defaults,
+					args,
+					isRaw
+				]);
+				return;
+			}
+			return this._logFn(defaults, args, isRaw);
+		};
+	}
+	_logFn(defaults, args, isRaw) {
+		if ((defaults.level || 0) > this.level) return false;
+		const logObj = {
+			date: /* @__PURE__ */ new Date(),
+			args: [],
+			...defaults,
+			level: _normalizeLogLevel(defaults.level, this.options.types)
+		};
+		if (!isRaw && args.length === 1 && isLogObj(args[0])) Object.assign(logObj, args[0]);
+		else logObj.args = [...args];
+		if (logObj.message) {
+			logObj.args.unshift(logObj.message);
+			delete logObj.message;
+		}
+		if (logObj.additional) {
+			if (!Array.isArray(logObj.additional)) logObj.additional = logObj.additional.split("\n");
+			logObj.args.push("\n" + logObj.additional.join("\n"));
+			delete logObj.additional;
+		}
+		logObj.type = typeof logObj.type === "string" ? logObj.type.toLowerCase() : "log";
+		logObj.tag = typeof logObj.tag === "string" ? logObj.tag : "";
+		const resolveLog = (newLog = false) => {
+			const repeated = (this._lastLog.count || 0) - this.options.throttleMin;
+			if (this._lastLog.object && repeated > 0) {
+				const args2 = [...this._lastLog.object.args];
+				if (repeated > 1) args2.push(`(repeated ${repeated} times)`);
+				this._log({
+					...this._lastLog.object,
+					args: args2
+				});
+				this._lastLog.count = 1;
+			}
+			if (newLog) {
+				this._lastLog.object = logObj;
+				this._log(logObj);
+			}
+		};
+		clearTimeout(this._lastLog.timeout);
+		const diffTime = this._lastLog.time && logObj.date ? logObj.date.getTime() - this._lastLog.time.getTime() : 0;
+		this._lastLog.time = logObj.date;
+		if (diffTime < this.options.throttle) try {
+			const serializedLog = JSON.stringify([
+				logObj.type,
+				logObj.tag,
+				logObj.args
+			]);
+			const isSameLog = this._lastLog.serialized === serializedLog;
+			this._lastLog.serialized = serializedLog;
+			if (isSameLog) {
+				this._lastLog.count = (this._lastLog.count || 0) + 1;
+				if (this._lastLog.count > this.options.throttleMin) {
+					this._lastLog.timeout = setTimeout(resolveLog, this.options.throttle);
+					return;
+				}
+			}
+		} catch {}
+		resolveLog(true);
+	}
+	_log(logObj) {
+		for (const reporter of this.options.reporters) reporter.log(logObj, { options: this.options });
+	}
+};
+function _normalizeLogLevel(input, types = {}, defaultLevel = 3) {
+	if (input === void 0) return defaultLevel;
+	if (typeof input === "number") return input;
+	if (types[input] && types[input].level !== void 0) return types[input].level;
+	return defaultLevel;
+}
+Consola.prototype.add = Consola.prototype.addReporter;
+Consola.prototype.remove = Consola.prototype.removeReporter;
+Consola.prototype.clear = Consola.prototype.removeReporter;
+Consola.prototype.withScope = Consola.prototype.withTag;
+Consola.prototype.mock = Consola.prototype.mockTypes;
+Consola.prototype.pause = Consola.prototype.pauseLogs;
+Consola.prototype.resume = Consola.prototype.resumeLogs;
+function createConsola$1(options = {}) {
+	return new Consola(options);
+}
+//#endregion
+//#region node_modules/consola/dist/shared/consola.DRwqZj3T.mjs
+function parseStack(stack, message) {
+	const cwd = process.cwd() + node_path.sep;
+	return stack.split("\n").splice(message.split("\n").length).map((l) => l.trim().replace("file://", "").replace(cwd, ""));
+}
+function writeStream(data, stream) {
+	return (stream.__write || stream.write).call(stream, data);
+}
+var bracket = (x) => x ? `[${x}]` : "";
+var BasicReporter = class {
+	formatStack(stack, message, opts) {
+		const indent = "  ".repeat((opts?.errorLevel || 0) + 1);
+		return indent + parseStack(stack, message).join(`
+${indent}`);
+	}
+	formatError(err, opts) {
+		const message = err.message ?? (0, node_util.formatWithOptions)(opts, err);
+		const stack = err.stack ? this.formatStack(err.stack, message, opts) : "";
+		const level = opts?.errorLevel || 0;
+		const causedPrefix = level > 0 ? `${"  ".repeat(level)}[cause]: ` : "";
+		const causedError = err.cause ? "\n\n" + this.formatError(err.cause, {
+			...opts,
+			errorLevel: level + 1
+		}) : "";
+		return causedPrefix + message + "\n" + stack + causedError;
+	}
+	formatArgs(args, opts) {
+		return (0, node_util.formatWithOptions)(opts, ...args.map((arg) => {
+			if (arg && typeof arg.stack === "string") return this.formatError(arg, opts);
+			return arg;
+		}));
+	}
+	formatDate(date, opts) {
+		return opts.date ? date.toLocaleTimeString() : "";
+	}
+	filterAndJoin(arr) {
+		return arr.filter(Boolean).join(" ");
+	}
+	formatLogObj(logObj, opts) {
+		const message = this.formatArgs(logObj.args, opts);
+		if (logObj.type === "box") return "\n" + [
+			bracket(logObj.tag),
+			logObj.title && logObj.title,
+			...message.split("\n")
+		].filter(Boolean).map((l) => " > " + l).join("\n") + "\n";
+		return this.filterAndJoin([
+			bracket(logObj.type),
+			bracket(logObj.tag),
+			message
+		]);
+	}
+	log(logObj, ctx) {
+		return writeStream(this.formatLogObj(logObj, {
+			columns: ctx.options.stdout.columns || 0,
+			...ctx.options.formatOptions
+		}) + "\n", logObj.level < 2 ? ctx.options.stderr || process.stderr : ctx.options.stdout || process.stdout);
+	}
+};
+//#endregion
+//#region node_modules/consola/dist/shared/consola.DXBYu-KD.mjs
+var { env = {}, argv = [], platform = "" } = typeof process === "undefined" ? {} : process;
+var isDisabled = "NO_COLOR" in env || argv.includes("--no-color");
+var isForced = "FORCE_COLOR" in env || argv.includes("--color");
+var isWindows = platform === "win32";
+var isDumbTerminal = env.TERM === "dumb";
+var isCompatibleTerminal = node_tty && node_tty.isatty && node_tty.isatty(1) && env.TERM && !isDumbTerminal;
+var isCI = "CI" in env && ("GITHUB_ACTIONS" in env || "GITLAB_CI" in env || "CIRCLECI" in env);
+var isColorSupported = !isDisabled && (isForced || isWindows && !isDumbTerminal || isCompatibleTerminal || isCI);
+function replaceClose(index, string, close, replace, head = string.slice(0, Math.max(0, index)) + replace, tail = string.slice(Math.max(0, index + close.length)), next = tail.indexOf(close)) {
+	return head + (next < 0 ? tail : replaceClose(next, tail, close, replace));
+}
+function clearBleed(index, string, open, close, replace) {
+	return index < 0 ? open + string + close : open + replaceClose(index, string, close, replace) + close;
+}
+function filterEmpty(open, close, replace = open, at = open.length + 1) {
+	return (string) => string || !(string === "" || string === void 0) ? clearBleed(("" + string).indexOf(close, at), string, open, close, replace) : "";
+}
+function init(open, close, replace) {
+	return filterEmpty(`\x1B[${open}m`, `\x1B[${close}m`, replace);
+}
+var colorDefs = {
+	reset: init(0, 0),
+	bold: init(1, 22, "\x1B[22m\x1B[1m"),
+	dim: init(2, 22, "\x1B[22m\x1B[2m"),
+	italic: init(3, 23),
+	underline: init(4, 24),
+	inverse: init(7, 27),
+	hidden: init(8, 28),
+	strikethrough: init(9, 29),
+	black: init(30, 39),
+	red: init(31, 39),
+	green: init(32, 39),
+	yellow: init(33, 39),
+	blue: init(34, 39),
+	magenta: init(35, 39),
+	cyan: init(36, 39),
+	white: init(37, 39),
+	gray: init(90, 39),
+	bgBlack: init(40, 49),
+	bgRed: init(41, 49),
+	bgGreen: init(42, 49),
+	bgYellow: init(43, 49),
+	bgBlue: init(44, 49),
+	bgMagenta: init(45, 49),
+	bgCyan: init(46, 49),
+	bgWhite: init(47, 49),
+	blackBright: init(90, 39),
+	redBright: init(91, 39),
+	greenBright: init(92, 39),
+	yellowBright: init(93, 39),
+	blueBright: init(94, 39),
+	magentaBright: init(95, 39),
+	cyanBright: init(96, 39),
+	whiteBright: init(97, 39),
+	bgBlackBright: init(100, 49),
+	bgRedBright: init(101, 49),
+	bgGreenBright: init(102, 49),
+	bgYellowBright: init(103, 49),
+	bgBlueBright: init(104, 49),
+	bgMagentaBright: init(105, 49),
+	bgCyanBright: init(106, 49),
+	bgWhiteBright: init(107, 49)
+};
+function createColors(useColor = isColorSupported) {
+	return useColor ? colorDefs : Object.fromEntries(Object.keys(colorDefs).map((key) => [key, String]));
+}
+var colors = createColors();
+function getColor$1(color, fallback = "reset") {
+	return colors[color] || colors[fallback];
+}
+var ansiRegex$1 = [String.raw`[\u001B\u009B][[\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\d\/#&.:=?%@~_]+)*|[a-zA-Z\d]+(?:;[-a-zA-Z\d\/#&.:=?%@~_]*)*)?\u0007)`, String.raw`(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))`].join("|");
+function stripAnsi$1(text) {
+	return text.replace(new RegExp(ansiRegex$1, "g"), "");
+}
+var boxStylePresets = {
+	solid: {
+		tl: "┌",
+		tr: "┐",
+		bl: "└",
+		br: "┘",
+		h: "─",
+		v: "│"
+	},
+	double: {
+		tl: "╔",
+		tr: "╗",
+		bl: "╚",
+		br: "╝",
+		h: "═",
+		v: "║"
+	},
+	doubleSingle: {
+		tl: "╓",
+		tr: "╖",
+		bl: "╙",
+		br: "╜",
+		h: "─",
+		v: "║"
+	},
+	doubleSingleRounded: {
+		tl: "╭",
+		tr: "╮",
+		bl: "╰",
+		br: "╯",
+		h: "─",
+		v: "║"
+	},
+	singleThick: {
+		tl: "┏",
+		tr: "┓",
+		bl: "┗",
+		br: "┛",
+		h: "━",
+		v: "┃"
+	},
+	singleDouble: {
+		tl: "╒",
+		tr: "╕",
+		bl: "╘",
+		br: "╛",
+		h: "═",
+		v: "│"
+	},
+	singleDoubleRounded: {
+		tl: "╭",
+		tr: "╮",
+		bl: "╰",
+		br: "╯",
+		h: "═",
+		v: "│"
+	},
+	rounded: {
+		tl: "╭",
+		tr: "╮",
+		bl: "╰",
+		br: "╯",
+		h: "─",
+		v: "│"
+	}
+};
+var defaultStyle = {
+	borderColor: "white",
+	borderStyle: "rounded",
+	valign: "center",
+	padding: 2,
+	marginLeft: 1,
+	marginTop: 1,
+	marginBottom: 1
+};
+function box(text, _opts = {}) {
+	const opts = {
+		..._opts,
+		style: {
+			...defaultStyle,
+			..._opts.style
+		}
+	};
+	const textLines = text.split("\n");
+	const boxLines = [];
+	const _color = getColor$1(opts.style.borderColor);
+	const borderStyle = { ...typeof opts.style.borderStyle === "string" ? boxStylePresets[opts.style.borderStyle] || boxStylePresets.solid : opts.style.borderStyle };
+	if (_color) for (const key in borderStyle) borderStyle[key] = _color(borderStyle[key]);
+	const paddingOffset = opts.style.padding % 2 === 0 ? opts.style.padding : opts.style.padding + 1;
+	const height = textLines.length + paddingOffset;
+	const width = Math.max(...textLines.map((line) => stripAnsi$1(line).length), opts.title ? stripAnsi$1(opts.title).length : 0) + paddingOffset;
+	const widthOffset = width + paddingOffset;
+	const leftSpace = opts.style.marginLeft > 0 ? " ".repeat(opts.style.marginLeft) : "";
+	if (opts.style.marginTop > 0) boxLines.push("".repeat(opts.style.marginTop));
+	if (opts.title) {
+		const title = _color ? _color(opts.title) : opts.title;
+		const left = borderStyle.h.repeat(Math.floor((width - stripAnsi$1(opts.title).length) / 2));
+		const right = borderStyle.h.repeat(width - stripAnsi$1(opts.title).length - stripAnsi$1(left).length + paddingOffset);
+		boxLines.push(`${leftSpace}${borderStyle.tl}${left}${title}${right}${borderStyle.tr}`);
+	} else boxLines.push(`${leftSpace}${borderStyle.tl}${borderStyle.h.repeat(widthOffset)}${borderStyle.tr}`);
+	const valignOffset = opts.style.valign === "center" ? Math.floor((height - textLines.length) / 2) : opts.style.valign === "top" ? height - textLines.length - paddingOffset : height - textLines.length;
+	for (let i = 0; i < height; i++) if (i < valignOffset || i >= valignOffset + textLines.length) boxLines.push(`${leftSpace}${borderStyle.v}${" ".repeat(widthOffset)}${borderStyle.v}`);
+	else {
+		const line = textLines[i - valignOffset];
+		const left = " ".repeat(paddingOffset);
+		const right = " ".repeat(width - stripAnsi$1(line).length);
+		boxLines.push(`${leftSpace}${borderStyle.v}${left}${line}${right}${borderStyle.v}`);
+	}
+	boxLines.push(`${leftSpace}${borderStyle.bl}${borderStyle.h.repeat(widthOffset)}${borderStyle.br}`);
+	if (opts.style.marginBottom > 0) boxLines.push("".repeat(opts.style.marginBottom));
+	return boxLines.join("\n");
+}
+//#endregion
+//#region node_modules/consola/dist/index.mjs
+var r = Object.create(null), i = (e) => globalThis.process.env || {
+	"BASE_URL": "/",
+	"DEV": true,
+	"MODE": "development",
+	"PROD": false,
+	"SSR": true,
+	"VITE_SKIP_OAUTH": "true"
+}, o = new Proxy(r, {
+	get(e, s) {
+		return i()[s] ?? r[s];
+	},
+	has(e, s) {
+		return s in i() || s in r;
+	},
+	set(e, s, E) {
+		const B = i(true);
+		return B[s] = E, true;
+	},
+	deleteProperty(e, s) {
+		if (!s) return false;
+		const E = i(true);
+		return delete E[s], true;
+	},
+	ownKeys() {
+		const e = i(true);
+		return Object.keys(e);
+	}
+}), t = typeof process < "u" && process.env && process.env.NODE_ENV || "", f = [
+	["APPVEYOR"],
+	[
+		"AWS_AMPLIFY",
+		"AWS_APP_ID",
+		{ ci: true }
+	],
+	["AZURE_PIPELINES", "SYSTEM_TEAMFOUNDATIONCOLLECTIONURI"],
+	["AZURE_STATIC", "INPUT_AZURE_STATIC_WEB_APPS_API_TOKEN"],
+	["APPCIRCLE", "AC_APPCIRCLE"],
+	["BAMBOO", "bamboo_planKey"],
+	["BITBUCKET", "BITBUCKET_COMMIT"],
+	["BITRISE", "BITRISE_IO"],
+	["BUDDY", "BUDDY_WORKSPACE_ID"],
+	["BUILDKITE"],
+	["CIRCLE", "CIRCLECI"],
+	["CIRRUS", "CIRRUS_CI"],
+	[
+		"CLOUDFLARE_PAGES",
+		"CF_PAGES",
+		{ ci: true }
+	],
+	["CODEBUILD", "CODEBUILD_BUILD_ARN"],
+	["CODEFRESH", "CF_BUILD_ID"],
+	["DRONE"],
+	["DRONE", "DRONE_BUILD_EVENT"],
+	["DSARI"],
+	["GITHUB_ACTIONS"],
+	["GITLAB", "GITLAB_CI"],
+	["GITLAB", "CI_MERGE_REQUEST_ID"],
+	["GOCD", "GO_PIPELINE_LABEL"],
+	["LAYERCI"],
+	["HUDSON", "HUDSON_URL"],
+	["JENKINS", "JENKINS_URL"],
+	["MAGNUM"],
+	["NETLIFY"],
+	[
+		"NETLIFY",
+		"NETLIFY_LOCAL",
+		{ ci: false }
+	],
+	["NEVERCODE"],
+	["RENDER"],
+	["SAIL", "SAILCI"],
+	["SEMAPHORE"],
+	["SCREWDRIVER"],
+	["SHIPPABLE"],
+	["SOLANO", "TDDIUM"],
+	["STRIDER"],
+	["TEAMCITY", "TEAMCITY_VERSION"],
+	["TRAVIS"],
+	["VERCEL", "NOW_BUILDER"],
+	[
+		"VERCEL",
+		"VERCEL",
+		{ ci: false }
+	],
+	[
+		"VERCEL",
+		"VERCEL_ENV",
+		{ ci: false }
+	],
+	["APPCENTER", "APPCENTER_BUILD_ID"],
+	[
+		"CODESANDBOX",
+		"CODESANDBOX_SSE",
+		{ ci: false }
+	],
+	[
+		"CODESANDBOX",
+		"CODESANDBOX_HOST",
+		{ ci: false }
+	],
+	["STACKBLITZ"],
+	["STORMKIT"],
+	["CLEAVR"],
+	["ZEABUR"],
+	[
+		"CODESPHERE",
+		"CODESPHERE_APP_ID",
+		{ ci: true }
+	],
+	["RAILWAY", "RAILWAY_PROJECT_ID"],
+	["RAILWAY", "RAILWAY_SERVICE_ID"],
+	["DENO-DEPLOY", "DENO_DEPLOYMENT_ID"],
+	[
+		"FIREBASE_APP_HOSTING",
+		"FIREBASE_APP_HOSTING",
+		{ ci: true }
+	]
+];
+function b() {
+	if (globalThis.process.env) for (const e of f) {
+		const s = e[1] || e[0];
+		if (globalThis.process.env[s]) return {
+			name: e[0].toLowerCase(),
+			...e[2]
+		};
+	}
+	return globalThis.process.env?.SHELL === "/bin/jsh" && globalThis.process?.versions?.webcontainer ? {
+		name: "stackblitz",
+		ci: false
+	} : {
+		name: "",
+		ci: false
+	};
+}
+var l = b();
+l.name;
+function n(e) {
+	return e ? e !== "false" : false;
+}
+var I = globalThis.process?.platform || "", T = n(o.CI) || l.ci !== false, a = n(globalThis.process?.stdout && globalThis.process?.stdout.isTTY), g = n(o.DEBUG), R = t === "test" || n(o.TEST);
+o.MINIMAL;
+var A = /^win/i.test(I);
+!n(o.NO_COLOR) && (n(o.FORCE_COLOR) || (a || A) && o.TERM);
+var C = (globalThis.process?.versions?.node || "").replace(/^v/, "") || null;
+Number(C?.split(".")[0]);
+var y = globalThis.process || Object.create(null), _ = { versions: {} };
+new Proxy(y, { get(e, s) {
+	if (s === "env") return o;
+	if (s in e) return e[s];
+	if (s in _) return _[s];
+} });
+var c = globalThis.process?.release?.name === "node", O = !!globalThis.Bun || !!globalThis.process?.versions?.bun, D = !!globalThis.Deno, L = !!globalThis.fastly, S = !!globalThis.Netlify, u = !!globalThis.EdgeRuntime, N = globalThis.navigator?.userAgent === "Cloudflare-Workers", F = [
+	[S, "netlify"],
+	[u, "edge-light"],
+	[N, "workerd"],
+	[L, "fastly"],
+	[D, "deno"],
+	[O, "bun"],
+	[c, "node"]
+];
+function G() {
+	const e = F.find((s) => s[0]);
+	if (e) return { name: e[1] };
+}
+G()?.name;
+function ansiRegex({ onlyFirst = false } = {}) {
+	const pattern = [`[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?(?:\\u0007|\\u001B\\u005C|\\u009C))`, "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]))"].join("|");
+	return new RegExp(pattern, onlyFirst ? void 0 : "g");
+}
+var regex = ansiRegex();
+function stripAnsi(string) {
+	if (typeof string !== "string") throw new TypeError(`Expected a \`string\`, got \`${typeof string}\``);
+	return string.replace(regex, "");
+}
+function isAmbiguous(x) {
+	return x === 161 || x === 164 || x === 167 || x === 168 || x === 170 || x === 173 || x === 174 || x >= 176 && x <= 180 || x >= 182 && x <= 186 || x >= 188 && x <= 191 || x === 198 || x === 208 || x === 215 || x === 216 || x >= 222 && x <= 225 || x === 230 || x >= 232 && x <= 234 || x === 236 || x === 237 || x === 240 || x === 242 || x === 243 || x >= 247 && x <= 250 || x === 252 || x === 254 || x === 257 || x === 273 || x === 275 || x === 283 || x === 294 || x === 295 || x === 299 || x >= 305 && x <= 307 || x === 312 || x >= 319 && x <= 322 || x === 324 || x >= 328 && x <= 331 || x === 333 || x === 338 || x === 339 || x === 358 || x === 359 || x === 363 || x === 462 || x === 464 || x === 466 || x === 468 || x === 470 || x === 472 || x === 474 || x === 476 || x === 593 || x === 609 || x === 708 || x === 711 || x >= 713 && x <= 715 || x === 717 || x === 720 || x >= 728 && x <= 731 || x === 733 || x === 735 || x >= 768 && x <= 879 || x >= 913 && x <= 929 || x >= 931 && x <= 937 || x >= 945 && x <= 961 || x >= 963 && x <= 969 || x === 1025 || x >= 1040 && x <= 1103 || x === 1105 || x === 8208 || x >= 8211 && x <= 8214 || x === 8216 || x === 8217 || x === 8220 || x === 8221 || x >= 8224 && x <= 8226 || x >= 8228 && x <= 8231 || x === 8240 || x === 8242 || x === 8243 || x === 8245 || x === 8251 || x === 8254 || x === 8308 || x === 8319 || x >= 8321 && x <= 8324 || x === 8364 || x === 8451 || x === 8453 || x === 8457 || x === 8467 || x === 8470 || x === 8481 || x === 8482 || x === 8486 || x === 8491 || x === 8531 || x === 8532 || x >= 8539 && x <= 8542 || x >= 8544 && x <= 8555 || x >= 8560 && x <= 8569 || x === 8585 || x >= 8592 && x <= 8601 || x === 8632 || x === 8633 || x === 8658 || x === 8660 || x === 8679 || x === 8704 || x === 8706 || x === 8707 || x === 8711 || x === 8712 || x === 8715 || x === 8719 || x === 8721 || x === 8725 || x === 8730 || x >= 8733 && x <= 8736 || x === 8739 || x === 8741 || x >= 8743 && x <= 8748 || x === 8750 || x >= 8756 && x <= 8759 || x === 8764 || x === 8765 || x === 8776 || x === 8780 || x === 8786 || x === 8800 || x === 8801 || x >= 8804 && x <= 8807 || x === 8810 || x === 8811 || x === 8814 || x === 8815 || x === 8834 || x === 8835 || x === 8838 || x === 8839 || x === 8853 || x === 8857 || x === 8869 || x === 8895 || x === 8978 || x >= 9312 && x <= 9449 || x >= 9451 && x <= 9547 || x >= 9552 && x <= 9587 || x >= 9600 && x <= 9615 || x >= 9618 && x <= 9621 || x === 9632 || x === 9633 || x >= 9635 && x <= 9641 || x === 9650 || x === 9651 || x === 9654 || x === 9655 || x === 9660 || x === 9661 || x === 9664 || x === 9665 || x >= 9670 && x <= 9672 || x === 9675 || x >= 9678 && x <= 9681 || x >= 9698 && x <= 9701 || x === 9711 || x === 9733 || x === 9734 || x === 9737 || x === 9742 || x === 9743 || x === 9756 || x === 9758 || x === 9792 || x === 9794 || x === 9824 || x === 9825 || x >= 9827 && x <= 9829 || x >= 9831 && x <= 9834 || x === 9836 || x === 9837 || x === 9839 || x === 9886 || x === 9887 || x === 9919 || x >= 9926 && x <= 9933 || x >= 9935 && x <= 9939 || x >= 9941 && x <= 9953 || x === 9955 || x === 9960 || x === 9961 || x >= 9963 && x <= 9969 || x === 9972 || x >= 9974 && x <= 9977 || x === 9979 || x === 9980 || x === 9982 || x === 9983 || x === 10045 || x >= 10102 && x <= 10111 || x >= 11094 && x <= 11097 || x >= 12872 && x <= 12879 || x >= 57344 && x <= 63743 || x >= 65024 && x <= 65039 || x === 65533 || x >= 127232 && x <= 127242 || x >= 127248 && x <= 127277 || x >= 127280 && x <= 127337 || x >= 127344 && x <= 127373 || x === 127375 || x === 127376 || x >= 127387 && x <= 127404 || x >= 917760 && x <= 917999 || x >= 983040 && x <= 1048573 || x >= 1048576 && x <= 1114109;
+}
+function isFullWidth(x) {
+	return x === 12288 || x >= 65281 && x <= 65376 || x >= 65504 && x <= 65510;
+}
+function isWide(x) {
+	return x >= 4352 && x <= 4447 || x === 8986 || x === 8987 || x === 9001 || x === 9002 || x >= 9193 && x <= 9196 || x === 9200 || x === 9203 || x === 9725 || x === 9726 || x === 9748 || x === 9749 || x >= 9776 && x <= 9783 || x >= 9800 && x <= 9811 || x === 9855 || x >= 9866 && x <= 9871 || x === 9875 || x === 9889 || x === 9898 || x === 9899 || x === 9917 || x === 9918 || x === 9924 || x === 9925 || x === 9934 || x === 9940 || x === 9962 || x === 9970 || x === 9971 || x === 9973 || x === 9978 || x === 9981 || x === 9989 || x === 9994 || x === 9995 || x === 10024 || x === 10060 || x === 10062 || x >= 10067 && x <= 10069 || x === 10071 || x >= 10133 && x <= 10135 || x === 10160 || x === 10175 || x === 11035 || x === 11036 || x === 11088 || x === 11093 || x >= 11904 && x <= 11929 || x >= 11931 && x <= 12019 || x >= 12032 && x <= 12245 || x >= 12272 && x <= 12287 || x >= 12289 && x <= 12350 || x >= 12353 && x <= 12438 || x >= 12441 && x <= 12543 || x >= 12549 && x <= 12591 || x >= 12593 && x <= 12686 || x >= 12688 && x <= 12773 || x >= 12783 && x <= 12830 || x >= 12832 && x <= 12871 || x >= 12880 && x <= 42124 || x >= 42128 && x <= 42182 || x >= 43360 && x <= 43388 || x >= 44032 && x <= 55203 || x >= 63744 && x <= 64255 || x >= 65040 && x <= 65049 || x >= 65072 && x <= 65106 || x >= 65108 && x <= 65126 || x >= 65128 && x <= 65131 || x >= 94176 && x <= 94180 || x === 94192 || x === 94193 || x >= 94208 && x <= 100343 || x >= 100352 && x <= 101589 || x >= 101631 && x <= 101640 || x >= 110576 && x <= 110579 || x >= 110581 && x <= 110587 || x === 110589 || x === 110590 || x >= 110592 && x <= 110882 || x === 110898 || x >= 110928 && x <= 110930 || x === 110933 || x >= 110948 && x <= 110951 || x >= 110960 && x <= 111355 || x >= 119552 && x <= 119638 || x >= 119648 && x <= 119670 || x === 126980 || x === 127183 || x === 127374 || x >= 127377 && x <= 127386 || x >= 127488 && x <= 127490 || x >= 127504 && x <= 127547 || x >= 127552 && x <= 127560 || x === 127568 || x === 127569 || x >= 127584 && x <= 127589 || x >= 127744 && x <= 127776 || x >= 127789 && x <= 127797 || x >= 127799 && x <= 127868 || x >= 127870 && x <= 127891 || x >= 127904 && x <= 127946 || x >= 127951 && x <= 127955 || x >= 127968 && x <= 127984 || x === 127988 || x >= 127992 && x <= 128062 || x === 128064 || x >= 128066 && x <= 128252 || x >= 128255 && x <= 128317 || x >= 128331 && x <= 128334 || x >= 128336 && x <= 128359 || x === 128378 || x === 128405 || x === 128406 || x === 128420 || x >= 128507 && x <= 128591 || x >= 128640 && x <= 128709 || x === 128716 || x >= 128720 && x <= 128722 || x >= 128725 && x <= 128727 || x >= 128732 && x <= 128735 || x === 128747 || x === 128748 || x >= 128756 && x <= 128764 || x >= 128992 && x <= 129003 || x === 129008 || x >= 129292 && x <= 129338 || x >= 129340 && x <= 129349 || x >= 129351 && x <= 129535 || x >= 129648 && x <= 129660 || x >= 129664 && x <= 129673 || x >= 129679 && x <= 129734 || x >= 129742 && x <= 129756 || x >= 129759 && x <= 129769 || x >= 129776 && x <= 129784 || x >= 131072 && x <= 196605 || x >= 196608 && x <= 262141;
+}
+function validate(codePoint) {
+	if (!Number.isSafeInteger(codePoint)) throw new TypeError(`Expected a code point, got \`${typeof codePoint}\`.`);
+}
+function eastAsianWidth(codePoint, { ambiguousAsWide = false } = {}) {
+	validate(codePoint);
+	if (isFullWidth(codePoint) || isWide(codePoint) || ambiguousAsWide && isAmbiguous(codePoint)) return 2;
+	return 1;
+}
+var emojiRegex = () => {
+	return /[#*0-9]\uFE0F?\u20E3|[\xA9\xAE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23ED-\u23EF\u23F1\u23F2\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB\u25FC\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692\u2694-\u2697\u2699\u269B\u269C\u26A0\u26A7\u26AA\u26B0\u26B1\u26BD\u26BE\u26C4\u26C8\u26CF\u26D1\u26E9\u26F0-\u26F5\u26F7\u26F8\u26FA\u2702\u2708\u2709\u270F\u2712\u2714\u2716\u271D\u2721\u2733\u2734\u2744\u2747\u2757\u2763\u27A1\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B55\u3030\u303D\u3297\u3299]\uFE0F?|[\u261D\u270C\u270D](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?|[\u270A\u270B](?:\uD83C[\uDFFB-\uDFFF])?|[\u23E9-\u23EC\u23F0\u23F3\u25FD\u2693\u26A1\u26AB\u26C5\u26CE\u26D4\u26EA\u26FD\u2705\u2728\u274C\u274E\u2753-\u2755\u2795-\u2797\u27B0\u27BF\u2B50]|\u26D3\uFE0F?(?:\u200D\uD83D\uDCA5)?|\u26F9(?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|\u2764\uFE0F?(?:\u200D(?:\uD83D\uDD25|\uD83E\uDE79))?|\uD83C(?:[\uDC04\uDD70\uDD71\uDD7E\uDD7F\uDE02\uDE37\uDF21\uDF24-\uDF2C\uDF36\uDF7D\uDF96\uDF97\uDF99-\uDF9B\uDF9E\uDF9F\uDFCD\uDFCE\uDFD4-\uDFDF\uDFF5\uDFF7]\uFE0F?|[\uDF85\uDFC2\uDFC7](?:\uD83C[\uDFFB-\uDFFF])?|[\uDFC4\uDFCA](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDFCB\uDFCC](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDCCF\uDD8E\uDD91-\uDD9A\uDE01\uDE1A\uDE2F\uDE32-\uDE36\uDE38-\uDE3A\uDE50\uDE51\uDF00-\uDF20\uDF2D-\uDF35\uDF37-\uDF43\uDF45-\uDF4A\uDF4C-\uDF7C\uDF7E-\uDF84\uDF86-\uDF93\uDFA0-\uDFC1\uDFC5\uDFC6\uDFC8\uDFC9\uDFCF-\uDFD3\uDFE0-\uDFF0\uDFF8-\uDFFF]|\uDDE6\uD83C[\uDDE8-\uDDEC\uDDEE\uDDF1\uDDF2\uDDF4\uDDF6-\uDDFA\uDDFC\uDDFD\uDDFF]|\uDDE7\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEF\uDDF1-\uDDF4\uDDF6-\uDDF9\uDDFB\uDDFC\uDDFE\uDDFF]|\uDDE8\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDEE\uDDF0-\uDDF7\uDDFA-\uDDFF]|\uDDE9\uD83C[\uDDEA\uDDEC\uDDEF\uDDF0\uDDF2\uDDF4\uDDFF]|\uDDEA\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDED\uDDF7-\uDDFA]|\uDDEB\uD83C[\uDDEE-\uDDF0\uDDF2\uDDF4\uDDF7]|\uDDEC\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEE\uDDF1-\uDDF3\uDDF5-\uDDFA\uDDFC\uDDFE]|\uDDED\uD83C[\uDDF0\uDDF2\uDDF3\uDDF7\uDDF9\uDDFA]|\uDDEE\uD83C[\uDDE8-\uDDEA\uDDF1-\uDDF4\uDDF6-\uDDF9]|\uDDEF\uD83C[\uDDEA\uDDF2\uDDF4\uDDF5]|\uDDF0\uD83C[\uDDEA\uDDEC-\uDDEE\uDDF2\uDDF3\uDDF5\uDDF7\uDDFC\uDDFE\uDDFF]|\uDDF1\uD83C[\uDDE6-\uDDE8\uDDEE\uDDF0\uDDF7-\uDDFB\uDDFE]|\uDDF2\uD83C[\uDDE6\uDDE8-\uDDED\uDDF0-\uDDFF]|\uDDF3\uD83C[\uDDE6\uDDE8\uDDEA-\uDDEC\uDDEE\uDDF1\uDDF4\uDDF5\uDDF7\uDDFA\uDDFF]|\uDDF4\uD83C\uDDF2|\uDDF5\uD83C[\uDDE6\uDDEA-\uDDED\uDDF0-\uDDF3\uDDF7-\uDDF9\uDDFC\uDDFE]|\uDDF6\uD83C\uDDE6|\uDDF7\uD83C[\uDDEA\uDDF4\uDDF8\uDDFA\uDDFC]|\uDDF8\uD83C[\uDDE6-\uDDEA\uDDEC-\uDDF4\uDDF7-\uDDF9\uDDFB\uDDFD-\uDDFF]|\uDDF9\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDED\uDDEF-\uDDF4\uDDF7\uDDF9\uDDFB\uDDFC\uDDFF]|\uDDFA\uD83C[\uDDE6\uDDEC\uDDF2\uDDF3\uDDF8\uDDFE\uDDFF]|\uDDFB\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDEE\uDDF3\uDDFA]|\uDDFC\uD83C[\uDDEB\uDDF8]|\uDDFD\uD83C\uDDF0|\uDDFE\uD83C[\uDDEA\uDDF9]|\uDDFF\uD83C[\uDDE6\uDDF2\uDDFC]|\uDF44(?:\u200D\uD83D\uDFEB)?|\uDF4B(?:\u200D\uD83D\uDFE9)?|\uDFC3(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDFF3\uFE0F?(?:\u200D(?:\u26A7\uFE0F?|\uD83C\uDF08))?|\uDFF4(?:\u200D\u2620\uFE0F?|\uDB40\uDC67\uDB40\uDC62\uDB40(?:\uDC65\uDB40\uDC6E\uDB40\uDC67|\uDC73\uDB40\uDC63\uDB40\uDC74|\uDC77\uDB40\uDC6C\uDB40\uDC73)\uDB40\uDC7F)?)|\uD83D(?:[\uDC3F\uDCFD\uDD49\uDD4A\uDD6F\uDD70\uDD73\uDD76-\uDD79\uDD87\uDD8A-\uDD8D\uDDA5\uDDA8\uDDB1\uDDB2\uDDBC\uDDC2-\uDDC4\uDDD1-\uDDD3\uDDDC-\uDDDE\uDDE1\uDDE3\uDDE8\uDDEF\uDDF3\uDDFA\uDECB\uDECD-\uDECF\uDEE0-\uDEE5\uDEE9\uDEF0\uDEF3]\uFE0F?|[\uDC42\uDC43\uDC46-\uDC50\uDC66\uDC67\uDC6B-\uDC6D\uDC72\uDC74-\uDC76\uDC78\uDC7C\uDC83\uDC85\uDC8F\uDC91\uDCAA\uDD7A\uDD95\uDD96\uDE4C\uDE4F\uDEC0\uDECC](?:\uD83C[\uDFFB-\uDFFF])?|[\uDC6E\uDC70\uDC71\uDC73\uDC77\uDC81\uDC82\uDC86\uDC87\uDE45-\uDE47\uDE4B\uDE4D\uDE4E\uDEA3\uDEB4\uDEB5](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD74\uDD90](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?|[\uDC00-\uDC07\uDC09-\uDC14\uDC16-\uDC25\uDC27-\uDC3A\uDC3C-\uDC3E\uDC40\uDC44\uDC45\uDC51-\uDC65\uDC6A\uDC79-\uDC7B\uDC7D-\uDC80\uDC84\uDC88-\uDC8E\uDC90\uDC92-\uDCA9\uDCAB-\uDCFC\uDCFF-\uDD3D\uDD4B-\uDD4E\uDD50-\uDD67\uDDA4\uDDFB-\uDE2D\uDE2F-\uDE34\uDE37-\uDE41\uDE43\uDE44\uDE48-\uDE4A\uDE80-\uDEA2\uDEA4-\uDEB3\uDEB7-\uDEBF\uDEC1-\uDEC5\uDED0-\uDED2\uDED5-\uDED7\uDEDC-\uDEDF\uDEEB\uDEEC\uDEF4-\uDEFC\uDFE0-\uDFEB\uDFF0]|\uDC08(?:\u200D\u2B1B)?|\uDC15(?:\u200D\uD83E\uDDBA)?|\uDC26(?:\u200D(?:\u2B1B|\uD83D\uDD25))?|\uDC3B(?:\u200D\u2744\uFE0F?)?|\uDC41\uFE0F?(?:\u200D\uD83D\uDDE8\uFE0F?)?|\uDC68(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDC68\uDC69]\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFE])))?))?|\uDC69(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?[\uDC68\uDC69]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?|\uDC69\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?))|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFE])))?))?|\uDC6F(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDD75(?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDE2E(?:\u200D\uD83D\uDCA8)?|\uDE35(?:\u200D\uD83D\uDCAB)?|\uDE36(?:\u200D\uD83C\uDF2B\uFE0F?)?|\uDE42(?:\u200D[\u2194\u2195]\uFE0F?)?|\uDEB6(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?)|\uD83E(?:[\uDD0C\uDD0F\uDD18-\uDD1F\uDD30-\uDD34\uDD36\uDD77\uDDB5\uDDB6\uDDBB\uDDD2\uDDD3\uDDD5\uDEC3-\uDEC5\uDEF0\uDEF2-\uDEF8](?:\uD83C[\uDFFB-\uDFFF])?|[\uDD26\uDD35\uDD37-\uDD39\uDD3D\uDD3E\uDDB8\uDDB9\uDDCD\uDDCF\uDDD4\uDDD6-\uDDDD](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDDDE\uDDDF](?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD0D\uDD0E\uDD10-\uDD17\uDD20-\uDD25\uDD27-\uDD2F\uDD3A\uDD3F-\uDD45\uDD47-\uDD76\uDD78-\uDDB4\uDDB7\uDDBA\uDDBC-\uDDCC\uDDD0\uDDE0-\uDDFF\uDE70-\uDE7C\uDE80-\uDE89\uDE8F-\uDEC2\uDEC6\uDECE-\uDEDC\uDEDF-\uDEE9]|\uDD3C(?:\u200D[\u2640\u2642]\uFE0F?|\uD83C[\uDFFB-\uDFFF])?|\uDDCE(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDDD1(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1|\uDDD1\u200D\uD83E\uDDD2(?:\u200D\uD83E\uDDD2)?|\uDDD2(?:\u200D\uD83E\uDDD2)?))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFC-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFD-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFD\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFE]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF])))?))?|\uDEF1(?:\uD83C(?:\uDFFB(?:\u200D\uD83E\uDEF2\uD83C[\uDFFC-\uDFFF])?|\uDFFC(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFD-\uDFFF])?|\uDFFD(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])?|\uDFFE(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFD\uDFFF])?|\uDFFF(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFE])?))?)/g;
+};
+var segmenter = globalThis.Intl?.Segmenter ? new Intl.Segmenter() : { segment: (str) => str.split("") };
+var defaultIgnorableCodePointRegex = /^\p{Default_Ignorable_Code_Point}$/u;
+function stringWidth$1(string, options = {}) {
+	if (typeof string !== "string" || string.length === 0) return 0;
+	const { ambiguousIsNarrow = true, countAnsiEscapeCodes = false } = options;
+	if (!countAnsiEscapeCodes) string = stripAnsi(string);
+	if (string.length === 0) return 0;
+	let width = 0;
+	const eastAsianWidthOptions = { ambiguousAsWide: !ambiguousIsNarrow };
+	for (const { segment: character } of segmenter.segment(string)) {
+		const codePoint = character.codePointAt(0);
+		if (codePoint <= 31 || codePoint >= 127 && codePoint <= 159) continue;
+		if (codePoint >= 8203 && codePoint <= 8207 || codePoint === 65279) continue;
+		if (codePoint >= 768 && codePoint <= 879 || codePoint >= 6832 && codePoint <= 6911 || codePoint >= 7616 && codePoint <= 7679 || codePoint >= 8400 && codePoint <= 8447 || codePoint >= 65056 && codePoint <= 65071) continue;
+		if (codePoint >= 55296 && codePoint <= 57343) continue;
+		if (codePoint >= 65024 && codePoint <= 65039) continue;
+		if (defaultIgnorableCodePointRegex.test(character)) continue;
+		if (emojiRegex().test(character)) {
+			width += 2;
+			continue;
+		}
+		width += eastAsianWidth(codePoint, eastAsianWidthOptions);
+	}
+	return width;
+}
+function isUnicodeSupported() {
+	const { env } = node_process.default;
+	const { TERM, TERM_PROGRAM } = env;
+	if (node_process.default.platform !== "win32") return TERM !== "linux";
+	return Boolean(env.WT_SESSION) || Boolean(env.TERMINUS_SUBLIME) || env.ConEmuTask === "{cmd::Cmder}" || TERM_PROGRAM === "Terminus-Sublime" || TERM_PROGRAM === "vscode" || TERM === "xterm-256color" || TERM === "alacritty" || TERM === "rxvt-unicode" || TERM === "rxvt-unicode-256color" || env.TERMINAL_EMULATOR === "JetBrains-JediTerm";
+}
+var TYPE_COLOR_MAP = {
+	info: "cyan",
+	fail: "red",
+	success: "green",
+	ready: "green",
+	start: "magenta"
+};
+var LEVEL_COLOR_MAP = {
+	0: "red",
+	1: "yellow"
+};
+var unicode = isUnicodeSupported();
+var s = (c, fallback) => unicode ? c : fallback;
+var TYPE_ICONS = {
+	error: s("✖", "×"),
+	fatal: s("✖", "×"),
+	ready: s("✔", "√"),
+	warn: s("⚠", "‼"),
+	info: s("ℹ", "i"),
+	success: s("✔", "√"),
+	debug: s("⚙", "D"),
+	trace: s("→", "→"),
+	fail: s("✖", "×"),
+	start: s("◐", "o"),
+	log: ""
+};
+function stringWidth(str) {
+	if (!(typeof Intl === "object") || !Intl.Segmenter) return stripAnsi$1(str).length;
+	return stringWidth$1(str);
+}
+var FancyReporter = class extends BasicReporter {
+	formatStack(stack, message, opts) {
+		const indent = "  ".repeat((opts?.errorLevel || 0) + 1);
+		return `
+${indent}` + parseStack(stack, message).map((line) => "  " + line.replace(/^at +/, (m) => colors.gray(m)).replace(/\((.+)\)/, (_, m) => `(${colors.cyan(m)})`)).join(`
+${indent}`);
+	}
+	formatType(logObj, isBadge, opts) {
+		const typeColor = TYPE_COLOR_MAP[logObj.type] || LEVEL_COLOR_MAP[logObj.level] || "gray";
+		if (isBadge) return getBgColor(typeColor)(colors.black(` ${logObj.type.toUpperCase()} `));
+		const _type = typeof TYPE_ICONS[logObj.type] === "string" ? TYPE_ICONS[logObj.type] : logObj.icon || logObj.type;
+		return _type ? getColor(typeColor)(_type) : "";
+	}
+	formatLogObj(logObj, opts) {
+		const [message, ...additional] = this.formatArgs(logObj.args, opts).split("\n");
+		if (logObj.type === "box") return box(characterFormat(message + (additional.length > 0 ? "\n" + additional.join("\n") : "")), {
+			title: logObj.title ? characterFormat(logObj.title) : void 0,
+			style: logObj.style
+		});
+		const date = this.formatDate(logObj.date, opts);
+		const coloredDate = date && colors.gray(date);
+		const isBadge = logObj.badge ?? logObj.level < 2;
+		const type = this.formatType(logObj, isBadge, opts);
+		const tag = logObj.tag ? colors.gray(logObj.tag) : "";
+		let line;
+		const left = this.filterAndJoin([type, characterFormat(message)]);
+		const right = this.filterAndJoin(opts.columns ? [tag, coloredDate] : [tag]);
+		const space = (opts.columns || 0) - stringWidth(left) - stringWidth(right) - 2;
+		line = space > 0 && (opts.columns || 0) >= 80 ? left + " ".repeat(space) + right : (right ? `${colors.gray(`[${right}]`)} ` : "") + left;
+		line += characterFormat(additional.length > 0 ? "\n" + additional.join("\n") : "");
+		if (logObj.type === "trace") {
+			const _err = /* @__PURE__ */ new Error("Trace: " + logObj.message);
+			line += this.formatStack(_err.stack || "", _err.message);
+		}
+		return isBadge ? "\n" + line + "\n" : line;
+	}
+};
+function characterFormat(str) {
+	return str.replace(/`([^`]+)`/gm, (_, m) => colors.cyan(m)).replace(/\s+_([^_]+)_\s+/gm, (_, m) => ` ${colors.underline(m)} `);
+}
+function getColor(color = "white") {
+	return colors[color] || colors.white;
+}
+function getBgColor(color = "bgWhite") {
+	return colors[`bg${color[0].toUpperCase()}${color.slice(1)}`] || colors.bgWhite;
+}
+function createConsola(options = {}) {
+	let level = _getDefaultLogLevel();
+	if (process.env.CONSOLA_LEVEL) level = Number.parseInt(process.env.CONSOLA_LEVEL) ?? level;
+	return createConsola$1({
+		level,
+		defaults: { level },
+		stdout: process.stdout,
+		stderr: process.stderr,
+		prompt: (...args) => Promise.resolve().then(() => require("./chunks/prompt-CLQTRVmc.js")).then((m) => m.prompt(...args)),
+		reporters: options.reporters || [options.fancy ?? !(T || R) ? new FancyReporter() : new BasicReporter()],
+		...options
+	});
+}
+function _getDefaultLogLevel() {
+	if (g) return LogLevels.debug;
+	if (R) return LogLevels.warn;
+	return LogLevels.info;
+}
+var consola = createConsola();
+//#endregion
+//#region node_modules/untun/dist/index.mjs
+async function startTunnel(opts) {
+	const { installCloudflared, startCloudflaredTunnel, cloudflaredBinPath, cloudflaredNotice } = await Promise.resolve().then(() => require("./chunks/chunks-D7gdiBfK.js"));
+	const url = opts.url || `${opts.protocol || "http"}://${opts.hostname ?? "localhost"}:${opts.port ?? 3e3}`;
+	consola.start(`Starting cloudflared tunnel to ${url}`);
+	if (!(0, node_fs.existsSync)(cloudflaredBinPath)) {
+		consola.log(cloudflaredNotice);
+		if (!(opts.acceptCloudflareNotice || process.env.UNTUN_ACCEPT_CLOUDFLARE_NOTICE || await consola.prompt(`Do you agree with the above terms and wish to install the binary from GitHub?`, { type: "confirm" }))) {
+			consola.fail("Skipping tunnel setup.");
+			return;
+		}
+		await installCloudflared();
+	}
+	const args = [["--url", url], opts.verifyTLS ? void 0 : ["--no-tls-verify", ""]].filter(Boolean);
+	const tunnel = await startCloudflaredTunnel(Object.fromEntries(args));
+	const cleanup = async () => {
+		await tunnel.stop();
+	};
+	for (const signal of [
+		"SIGINT",
+		"SIGUSR1",
+		"SIGUSR2"
+	]) process.once(signal, cleanup);
+	return {
+		getURL: async () => await tunnel.url,
+		close: async () => {
+			await cleanup();
+		}
+	};
+}
+//#endregion
+//#region src/main/services/wormhole.ts
+var activeTunnel = null;
+function registerWormhole({ ipcMain }) {
+	ipcMain.handle("open-wormhole", async (_event, port) => {
+		try {
+			if (activeTunnel) {
+				await activeTunnel.close();
+				activeTunnel = null;
+			}
+			activeTunnel = await startTunnel({
+				port,
+				acceptCloudflareNotice: true
+			});
+			return {
+				success: true,
+				url: await activeTunnel.getURL(),
+				password: null
+			};
+		} catch (err) {
+			return {
+				success: false,
+				error: String(err)
+			};
+		}
+	});
+	ipcMain.handle("close-wormhole", async () => {
+		if (activeTunnel) {
+			await activeTunnel.close();
+			activeTunnel = null;
+		}
+		return { success: true };
+	});
+}
+//#endregion
+//#region src/main/services/RAG-oracle.ts
+var HAPUPPY_BASE$2 = "https://beta.hapuppy.com/v1/chat/completions";
+var HAPUPPY_EMBED = "https://beta.hapuppy.com/v1/embeddings";
+var MODEL_EMBED = "text-embedding-3-small";
+var MODEL_ANSWER = "deepseek-v3.2";
+var EMBED_TIMEOUT = 3e4;
+var ANSWER_TIMEOUT = 6e4;
+var getStateDir = () => path.default.join(electron.app.getPath("userData"), "iris_scan_states");
+var getStateFilePath = (dirPath) => {
+	const hash = crypto$1.default.createHash("md5").update(path.default.normalize(dirPath)).digest("hex");
+	return path.default.join(getStateDir(), `${hash}.json`);
+};
+var saveState = async (state) => {
+	try {
+		await fs_promises.default.mkdir(getStateDir(), { recursive: true });
+		await fs_promises.default.writeFile(getStateFilePath(state.dirPath), JSON.stringify(state, null, 2));
+	} catch (e) {}
+};
+var loadState = async (dirPath) => {
+	try {
+		await fs_promises.default.mkdir(getStateDir(), { recursive: true });
+		const data = await fs_promises.default.readFile(getStateFilePath(dirPath), "utf-8");
+		return JSON.parse(data);
+	} catch {
+		return null;
+	}
+};
+var vectorDB = [];
+var processedFiles = /* @__PURE__ */ new Set();
+var isCancelled = false;
+var cosineSimilarity = (vecA, vecB) => {
+	let dot = 0, normA = 0, normB = 0;
+	for (let i = 0; i < vecA.length; i++) {
+		dot += vecA[i] * vecB[i];
+		normA += vecA[i] * vecA[i];
+		normB += vecB[i] * vecB[i];
+	}
+	return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+};
+var sleep$1 = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function smartEmbed(texts, geminiKey, taskType) {
+	if (geminiKey && geminiKey.trim()) try {
+		return (await new GoogleGenAI({ apiKey: geminiKey }).models.embedContent({
+			model: "gemini-embedding-001",
+			contents: texts,
+			config: { taskType }
+		})).embeddings.map((e) => e.values);
+	} catch (err) {
+		console.warn("[RAG Oracle] ⚠️ Gemini embed failed → fallback Hapuppy:", err?.message);
+	}
+	const hapuppyKey = (process.env.HAPUPPY_API_KEY || "").trim();
+	if (!hapuppyKey) throw new Error("No embedding API available (no Gemini key + no HAPUPPY_API_KEY in .env)");
+	console.log("[RAG Oracle] 🅱️ Using Hapuppy embeddings...");
+	return (await axios.post(HAPUPPY_EMBED, {
+		model: MODEL_EMBED,
+		input: texts
+	}, {
+		timeout: EMBED_TIMEOUT,
+		headers: {
+			Authorization: `Bearer ${hapuppyKey}`,
+			"Content-Type": "application/json"
+		}
+	})).data?.data?.map((d) => d.embedding) || [];
+}
+async function smartAnswer(contextText, query, groqKey) {
+	const systemPrompt = "You are an elite coding assistant. Answer the user's question based ONLY on the provided codebase context. Give direct code snippets and explanations. Be concise.";
+	if (groqKey && groqKey.trim()) try {
+		console.log("[RAG Oracle] 🅰️ Using Groq Llama 3.1...");
+		const answer = (await new Groq({ apiKey: groqKey }).chat.completions.create({
+			messages: [{
+				role: "system",
+				content: systemPrompt
+			}, {
+				role: "user",
+				content: `Context:\n${contextText}\n\nQuestion: ${query}`
+			}],
+			model: "llama-3.1-8b-instant"
+		})).choices[0]?.message?.content;
+		if (answer) return answer;
+		throw new Error("Empty Groq response");
+	} catch (err) {
+		console.warn("[RAG Oracle] ⚠️ Groq failed → fallback Hapuppy DeepSeek:", err?.message);
+	}
+	const hapuppyKey = (process.env.HAPUPPY_API_KEY || "").trim();
+	if (!hapuppyKey) throw new Error("No answer API available (no Groq key + no HAPUPPY_API_KEY in .env)");
+	console.log("[RAG Oracle] 🅱️ Using Hapuppy DeepSeek...");
+	return (await axios.post(HAPUPPY_BASE$2, {
+		model: MODEL_ANSWER,
+		messages: [{
+			role: "system",
+			content: systemPrompt
+		}, {
+			role: "user",
+			content: `Context:\n${contextText}\n\nQuestion: ${query}`
+		}],
+		temperature: .3,
+		max_tokens: 2048
+	}, {
+		timeout: ANSWER_TIMEOUT,
+		headers: {
+			Authorization: `Bearer ${hapuppyKey}`,
+			"Content-Type": "application/json"
+		}
+	})).data?.choices?.[0]?.message?.content?.trim() || "No answer generated.";
+}
+function registerOracle({ ipcMain }) {
+	ipcMain.handle("cancel-ingestion", () => {
+		isCancelled = true;
+		return { success: true };
+	});
+	ipcMain.handle("ingest-codebase", async (event, { dirPath, geminiKey }) => {
+		try {
+			const targetPath = path.default.normalize(dirPath.trim());
+			isCancelled = false;
+			const prevState = await loadState(targetPath);
+			if (prevState) {
+				vectorDB = prevState.vectorDB;
+				processedFiles = new Set(prevState.processedFiles);
+			} else {
+				vectorDB = [];
+				processedFiles = /* @__PURE__ */ new Set();
+			}
+			const ignoreDirs = [
+				"node_modules",
+				".git",
+				"dist",
+				"build",
+				".next",
+				"out",
+				"public"
+			];
+			const ignoreFiles = [
+				"package-lock.json",
+				"yarn.lock",
+				"pnpm-lock.yaml",
+				"package.json",
+				"tsconfig.json"
+			];
+			const allowedExts = [
+				".js",
+				".ts",
+				".jsx",
+				".tsx",
+				".py",
+				".md"
+			];
+			let allFiles = [];
+			async function fastScan(currentPath) {
+				if (isCancelled) return;
+				let entries;
+				try {
+					entries = await fs_promises.default.readdir(currentPath, { withFileTypes: true });
+				} catch {
+					return;
+				}
+				for (const entry of entries) {
+					const fullPath = path.default.join(currentPath, entry.name);
+					if (entry.isDirectory() && !ignoreDirs.includes(entry.name)) await fastScan(fullPath);
+					else if (entry.isFile() && allowedExts.includes(path.default.extname(entry.name)) && !ignoreFiles.includes(entry.name)) allFiles.push(fullPath);
+				}
+			}
+			event.sender.send("oracle-progress", {
+				status: "scanning",
+				file: "Initializing...",
+				totalFound: 0
+			});
+			await fastScan(targetPath);
+			if (isCancelled) return {
+				success: false,
+				error: "Aborted by user."
+			};
+			const filesToProcess = allFiles.filter((f) => !processedFiles.has(f));
+			const filesWithStats = await Promise.all(filesToProcess.map(async (f) => ({
+				path: f,
+				size: (await fs_promises.default.stat(f)).size
+			})));
+			filesWithStats.sort((a, b) => a.size - b.size);
+			const sortedFilesToProcess = filesWithStats.map((f) => f.path);
+			event.sender.send("oracle-progress", {
+				status: "scanning",
+				file: "Scan Complete",
+				totalFound: allFiles.length,
+				filesProcessed: processedFiles.size,
+				chunks: vectorDB.length
+			});
+			for (let i = 0; i < sortedFilesToProcess.length; i++) {
+				if (isCancelled) {
+					event.sender.send("oracle-progress", { status: "cancelled" });
+					break;
+				}
+				const fullPath = sortedFilesToProcess[i];
+				const fileName = path.default.basename(fullPath);
+				event.sender.send("oracle-progress", {
+					status: "reading",
+					file: fileName,
+					filesProcessed: processedFiles.size,
+					totalFiles: allFiles.length,
+					chunks: vectorDB.length
+				});
+				if ((await fs_promises.default.stat(fullPath)).size > 1e5) continue;
+				const validChunks = ((await fs_promises.default.readFile(fullPath, "utf-8")).match(/[\s\S]{1,1500}/g) || []).filter((c) => c.trim().length > 10);
+				if (validChunks.length === 0) {
+					processedFiles.add(fullPath);
+					continue;
+				}
+				try {
+					(await smartEmbed(validChunks.map((chunk) => `File: ${fileName}\n\n${chunk}`), geminiKey || null, "RETRIEVAL_DOCUMENT")).forEach((emb, idx) => {
+						vectorDB.push({
+							filePath: fullPath,
+							chunk: validChunks[idx],
+							embedding: emb
+						});
+					});
+					processedFiles.add(fullPath);
+					await saveState({
+						dirPath: targetPath,
+						processedFiles: Array.from(processedFiles),
+						vectorDB
+					});
+					event.sender.send("oracle-progress", {
+						status: "embedded",
+						file: fileName,
+						filesProcessed: processedFiles.size,
+						totalFiles: allFiles.length,
+						chunks: vectorDB.length
+					});
+					await sleep$1(3500);
+				} catch (apiError) {
+					console.warn(`[RAG Oracle] ⚠️ Skipping ${fileName}:`, apiError?.message);
+					await sleep$1(5e3);
+				}
+			}
+			return {
+				success: true,
+				totalChunks: vectorDB.length,
+				wasResumed: !!prevState
+			};
+		} catch (err) {
+			console.error("[RAG Oracle] ❌ Ingest failed:", err?.message);
+			return {
+				success: false,
+				error: String(err?.message || err)
+			};
+		}
+	});
+	ipcMain.handle("consult-oracle", async (_event, { query, geminiKey, groqKey }) => {
+		try {
+			if (vectorDB.length === 0) return {
+				success: false,
+				answer: "Error: No files loaded into memory."
+			};
+			const queryEmbedding = (await smartEmbed([query], geminiKey || null, "RETRIEVAL_QUERY"))[0];
+			if (!queryEmbedding) return {
+				success: false,
+				error: "Failed to generate query embedding"
+			};
+			const rankedChunks = vectorDB.map((item) => ({
+				...item,
+				score: cosineSimilarity(queryEmbedding, item.embedding)
+			})).sort((a, b) => b.score - a.score).slice(0, 3);
+			return {
+				success: true,
+				answer: await smartAnswer(rankedChunks.map((c) => `// File: ${c.filePath}\n${c.chunk}`).join("\n\n"), query, groqKey || null),
+				scannedFiles: rankedChunks.map((c) => c.filePath)
+			};
+		} catch (err) {
+			console.error("[RAG Oracle] ❌ Consult failed:", err?.message);
+			return {
+				success: false,
+				error: String(err?.message || err)
+			};
+		}
+	});
+}
+//#endregion
 //#region node_modules/js-tiktoken/dist/chunk-VL2OQCWN.js
 var import_base64_js = /* @__PURE__ */ __toESM(require_base64_js(), 1);
 var __defProp$1 = Object.defineProperty;
@@ -90104,56 +91161,173 @@ function tavily(options) {
 }
 //#endregion
 //#region src/main/services/deep-research.ts
+var HAPUPPY_BASE$1 = "https://beta.hapuppy.com/v1/chat/completions";
+var MODEL_RESEARCH$1 = "sonar-deep-research";
+var DEEP_RESEARCH_TIMEOUT$1 = 3e5;
+function isDeepQuery(query) {
+	const text = query.toLowerCase();
+	const hasDeepKeyword = [
+		"deep research",
+		"comprehensive",
+		"detailed report",
+		"full analysis",
+		"in-depth",
+		"thorough",
+		"extensive",
+		"complete report",
+		"write a report",
+		"build a report",
+		"long report",
+		"investigate thoroughly",
+		"everything about",
+		"all about",
+		"full breakdown",
+		"detailed breakdown",
+		"analyze deeply",
+		"deep dive",
+		"explore in depth",
+		"synthesize all information",
+		"gather all data",
+		"compile comprehensive report",
+		"exhaustive research",
+		"detailed findings",
+		"full synthesis",
+		"complete analysis"
+	].some((kw) => text.includes(kw));
+	const isLongQuery = query.length > 200;
+	return hasDeepKeyword || isLongQuery;
+}
 function registerDeepResearch({ ipcMain }) {
 	ipcMain.handle("execute-deep-research", async (event, { query, tavilyKey, groqKey }) => {
-		try {
-			if (!tavilyKey || !groqKey) throw new Error("Missing API Keys. Please configure Tavily and Groq in the Command Center.");
-			event.sender.send("oracle-progress", {
-				status: "scanning",
-				file: "IRIS and Tavily Neural Search Active...",
-				totalFound: 1
-			});
-			const rawContext = (await tavily({ apiKey: tavilyKey }).search(query, {
-				searchDepth: "advanced",
-				includeAnswer: true,
-				maxResults: 5
-			})).results.map((r) => `Source: ${r.url}\nContent: ${r.content}`).join("\n\n");
-			event.sender.send("oracle-progress", {
-				status: "reading",
-				file: "Llama 3.1 Instantly Synthesizing Data...",
-				totalFound: 2
-			});
-			const groq = new Groq({ apiKey: groqKey });
-			const prompt = `
+		const deepMode = isDeepQuery(query);
+		console.log(`[Deep Research] 🧠 IRIS thinks: ${deepMode ? "DEEP mode" : "QUICK mode"}`);
+		console.log(`[Deep Research] 📝 Query: "${query.slice(0, 80)}${query.length > 80 ? "..." : ""}"`);
+		if (!deepMode) {
+			if (tavilyKey && groqKey) {
+				const result = await tryTavilyGroq(query, tavilyKey, groqKey, event);
+				if (result.success) return result;
+				console.warn("[Deep Research] ⚠️ Quick mode failed → switching to Deep mode");
+			} else console.log("[Deep Research] ℹ️ Tavily/Groq keys missing → using Hapuppy");
+			return await tryHapuppy(query, event);
+		} else {
+			const result = await tryHapuppy(query, event);
+			if (result.success) return result;
+			console.warn("[Deep Research] ⚠️ Deep mode failed → trying Quick mode");
+			if (tavilyKey && groqKey) return await tryTavilyGroq(query, tavilyKey, groqKey, event);
+			return result;
+		}
+	});
+}
+async function tryTavilyGroq(query, tavilyKey, groqKey, event) {
+	try {
+		console.log("[Deep Research] 🅰️ Running Tavily + Groq...");
+		event.sender.send("oracle-progress", {
+			status: "scanning",
+			file: "IRIS Quick Mode — Tavily Neural Search...",
+			totalFound: 1
+		});
+		const rawContext = (await tavily({ apiKey: tavilyKey }).search(query, {
+			searchDepth: "advanced",
+			includeAnswer: true,
+			maxResults: 5
+		})).results.map((r) => `Source: ${r.url}\nContent: ${r.content}`).join("\n\n");
+		event.sender.send("oracle-progress", {
+			status: "reading",
+			file: "Llama 3.1 Synthesizing Data...",
+			totalFound: 2
+		});
+		const groq = new Groq({ apiKey: groqKey });
+		const prompt = `
         You are an elite research analyst. Answer: "${query}".
         Output ONLY a JSON object with a key "summary" containing a detailed, well-formatted markdown summary of your findings.
         Context: ${rawContext}
         `;
-			const jsonString = (await groq.chat.completions.create({
-				messages: [{
-					role: "user",
-					content: prompt
-				}],
-				model: "llama-3.1-8b-instant",
-				response_format: { type: "json_object" }
-			})).choices[0]?.message?.content || "{\"summary\": \"No data generated.\"}";
-			const extractedSummary = JSON.parse(jsonString).summary || "No data generated.";
-			event.sender.send("oracle-progress", {
-				status: "embedded",
-				file: "Research synthesis complete...",
-				totalFound: 3
-			});
-			return {
-				success: true,
-				summary: extractedSummary
-			};
-		} catch (error) {
-			return {
-				success: false,
-				error: String(error)
-			};
-		}
-	});
+		const jsonString = (await groq.chat.completions.create({
+			messages: [{
+				role: "user",
+				content: prompt
+			}],
+			model: "llama-3.1-8b-instant",
+			response_format: { type: "json_object" }
+		})).choices[0]?.message?.content || "{\"summary\": \"No data generated.\"}";
+		const extractedSummary = JSON.parse(jsonString).summary || "No data generated.";
+		event.sender.send("oracle-progress", {
+			status: "embedded",
+			file: "Quick research complete...",
+			totalFound: 3
+		});
+		console.log("[Deep Research] ✅ Tavily+Groq succeeded");
+		return {
+			success: true,
+			summary: extractedSummary
+		};
+	} catch (error) {
+		const errMsg = error?.message || String(error);
+		console.warn("[Deep Research] ❌ Tavily+Groq failed:", errMsg);
+		return {
+			success: false,
+			error: errMsg
+		};
+	}
+}
+async function tryHapuppy(query, event) {
+	try {
+		console.log("[Deep Research] 🅱️ Running Hapuppy sonar-deep-research...");
+		const hapuppyKey = (process.env.HAPUPPY_API_KEY || "").trim();
+		if (!hapuppyKey) return {
+			success: false,
+			error: "HAPUPPY_API_KEY missing in .env file"
+		};
+		event.sender.send("oracle-progress", {
+			status: "scanning",
+			file: "IRIS Deep Mode — Hapuppy Sonar Web Crawl...",
+			totalFound: 1
+		});
+		event.sender.send("oracle-progress", {
+			status: "reading",
+			file: "Sonar Deep Research Synthesizing (2-5 min)...",
+			totalFound: 2
+		});
+		const summary = (await axios.post(HAPUPPY_BASE$1, {
+			model: MODEL_RESEARCH$1,
+			messages: [{
+				role: "system",
+				content: "You are an elite research analyst. Perform deep web research and synthesize findings into a clear, structured markdown report with key facts, data points, and sources."
+			}, {
+				role: "user",
+				content: query
+			}],
+			temperature: .3,
+			max_tokens: 4096
+		}, {
+			timeout: DEEP_RESEARCH_TIMEOUT$1,
+			headers: {
+				Authorization: `Bearer ${hapuppyKey}`,
+				"Content-Type": "application/json"
+			}
+		})).data?.choices?.[0]?.message?.content?.trim() || "";
+		if (!summary) return {
+			success: false,
+			error: "Hapuppy returned empty response"
+		};
+		event.sender.send("oracle-progress", {
+			status: "embedded",
+			file: "Deep research complete via Hapuppy Sonar...",
+			totalFound: 3
+		});
+		console.log("[Deep Research] ✅ Hapuppy Sonar succeeded");
+		return {
+			success: true,
+			summary
+		};
+	} catch (error) {
+		const errMsg = error?.response?.data?.error?.message || error?.message || String(error);
+		console.error("[Deep Research] ❌ Hapuppy failed:", errMsg);
+		return {
+			success: false,
+			error: errMsg
+		};
+	}
 }
 //#endregion
 //#region src/main/auto/widget-manager.ts
@@ -91151,19 +92325,30 @@ function registerLockSystem() {
 //#endregion
 //#region src/main/services/telegram-bot.ts
 /**
-* IRIS Telegram Bot — HAPUPPY EDITION
-* Uses Hapuppy proxy for 100+ models with 100K daily credits
+* IRIS Telegram Bot — HAPUPPY EDITION (JARVIS FINAL + DEBUG VOICE)
 * 
 * Features:
-* ✅ Silent network error handling (no log spam)
+* ✅ Silent network error handling
 * ✅ Auto-recovery when network restored
-* ✅ Self-healing polling
 * ✅ Multi-modal (text, voice, photo)
+* ✅ Smart model routing (gemini/deepseek/sonar/qwen)
+* ✅ Whisper-1 voice transcription (cheapest)
+* ✅ Deep research 5-min timeout
+* ✅ Sonar models bypass tools (they have web built-in)
+* ✅ DEBUG MODE for voice (full error logging)
 */
 var HAPUPPY_BASE = "https://beta.hapuppy.com/v1/chat/completions";
-var MODEL_CHAT = "gemini-3.1-flash-lite";
+var HAPUPPY_TRANSCRIBE = "https://beta.hapuppy.com/v1/audio/transcriptions";
+var MODEL_CHAT = "gemini-2.5-flash";
 var MODEL_VISION = "gemini-2.5-flash";
-var MAX_TOOL_LOOPS = 5;
+var MODEL_SMART = "deepseek-v3.2";
+var MODEL_CODE = "qwen3-coder-480b-a35b-instruct";
+var MODEL_WEB = "sonar";
+var MODEL_RESEARCH = "sonar-deep-research";
+var MODEL_VOICE = "whisper-1";
+var MAX_TOOL_LOOPS = 8;
+var NORMAL_TIMEOUT = 6e4;
+var DEEP_RESEARCH_TIMEOUT = 3e5;
 var TELEGRAM_MSG_LIMIT = 4e3;
 function loadHapuppyKey() {
 	try {
@@ -91193,6 +92378,15 @@ function loadHapuppyKey() {
 		key: "",
 		source: "NOT FOUND"
 	};
+}
+function pickBestModel(userText) {
+	const t = userText.toLowerCase();
+	const length = userText.length;
+	if (/\b(deep research|research deeply|detailed report|comprehensive analysis|investigate thoroughly|full report on)\b/i.test(t)) return MODEL_RESEARCH;
+	if (/\b(latest|today|current|news|recent|2024|2025|price of|weather|stock|score|who won|breaking|happening)\b/i.test(t)) return MODEL_WEB;
+	if (/\b(code|debug|script|terminal|bash|python|javascript|typescript|fix bug|refactor|function|api endpoint)\b/i.test(t)) return MODEL_CODE;
+	if (/\b(explain why|analyze|compare|strategy|plan my|reason through|step by step)\b/i.test(t) || length > 400) return MODEL_SMART;
+	return MODEL_CHAT;
 }
 var IRIS_TOOLS = [
 	{
@@ -91341,7 +92535,7 @@ var IRIS_TOOLS = [
 	},
 	{
 		name: "deep_research",
-		description: "Deep web research.",
+		description: "Deep web research. Takes 2-5 minutes.",
 		params: { query: "string" },
 		required: ["query"]
 	},
@@ -91375,9 +92569,15 @@ function toolsForHapuppy() {
 		}
 	}));
 }
+var LONG_RUNNING_TOOLS = new Set([
+	"deep_research",
+	"smart_file_search",
+	"index_Folder"
+]);
 async function callRendererTool(name, args) {
 	const mainWindow = electron.BrowserWindow.getAllWindows()[0];
 	if (!mainWindow || mainWindow.isDestroyed()) return "Error: Main window not available.";
+	const timeout = LONG_RUNNING_TOOLS.has(name) ? DEEP_RESEARCH_TIMEOUT : 6e4;
 	return new Promise((resolve) => {
 		const requestId = `tg_tool_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 		const responseHandler = (_e, data) => {
@@ -91394,8 +92594,8 @@ async function callRendererTool(name, args) {
 		});
 		setTimeout(() => {
 			electron.ipcMain.removeListener("telegram-tool-response", responseHandler);
-			resolve(`Tool "${name}" timed out.`);
-		}, 6e4);
+			resolve(`Tool "${name}" timed out after ${timeout / 1e3}s.`);
+		}, timeout);
 	});
 }
 function keepTyping(bot, chatId, action = "typing") {
@@ -91415,27 +92615,30 @@ async function buildSystemPrompt(chatId) {
 		context = await callRendererTool("__get_iris_context__", {});
 	} catch {}
 	return `# 👁️ IRIS — Telegram Interface (JARVIS-style)
-You are IRIS, a high-performance AI agent.
+You are IRIS, a high-performance AI agent of Debjeet Dhar.
 Execute commands aggressively using tools. Be concise.
 
 ## IDENTITY
-- Creator: Debjeet Dhar
+- Creator/Boss: Debjeet Dhar — address as "Sir" or "Boss" occasionally
 - Tone: Witty, sharp, Hinglish-friendly, JARVIS-style
-- Rule: Never sound like a support bot.
+- Rule: Never sound like a support bot. Action over words.
 
 ## RULES
-- Keep replies short for Telegram
+- Keep replies short for Telegram (under 200 words usually)
 - Use minimal Markdown (bold/italic only)
-- Call tools when needed
-- Multi-step? Chain tool calls
+- Call tools when needed — don't ask permission
+- Multi-step? Chain tool calls aggressively
+- Deep research takes 2-5 min — that's normal
 
 ## CONTEXT
-- Time: ${(/* @__PURE__ */ new Date()).toLocaleString()}
+- Time: ${(/* @__PURE__ */ new Date()).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
 - Chat ID: ${chatId}
 ${context}
 `;
 }
 async function askHapuppy(userText, apiKey, systemPrompt, model = MODEL_CHAT) {
+	const timeout = model.includes("sonar-deep") ? DEEP_RESEARCH_TIMEOUT : NORMAL_TIMEOUT;
+	const useTools = !model.includes("sonar");
 	let messages = [{
 		role: "system",
 		content: systemPrompt
@@ -91447,15 +92650,18 @@ async function askHapuppy(userText, apiKey, systemPrompt, model = MODEL_CHAT) {
 	while (loops-- > 0) {
 		let res;
 		try {
-			res = await axios.post(HAPUPPY_BASE, {
+			const payload = {
 				model,
 				messages,
-				tools: toolsForHapuppy(),
-				tool_choice: "auto",
 				temperature: .7,
 				max_tokens: 2048
-			}, {
-				timeout: 6e4,
+			};
+			if (useTools) {
+				payload.tools = toolsForHapuppy();
+				payload.tool_choice = "auto";
+			}
+			res = await axios.post(HAPUPPY_BASE, payload, {
+				timeout,
 				headers: {
 					Authorization: `Bearer ${apiKey}`,
 					"Content-Type": "application/json"
@@ -91489,38 +92695,61 @@ async function askHapuppy(userText, apiKey, systemPrompt, model = MODEL_CHAT) {
 	return "⚠️ Max tool depth reached.";
 }
 async function transcribeVoice(bot, fileId, botToken, apiKey) {
+	let tempFilePath = "";
 	try {
-		const fileUrl = `https://api.telegram.org/file/bot${botToken}/${(await bot.getFile(fileId)).file_path}`;
+		console.log("\n[IRIS Voice] 🎙️ START");
+		const fileInfo = await bot.getFile(fileId);
+		if (!fileInfo.file_path) throw new Error("No file_path");
+		const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.file_path}`;
 		const audioRes = await axios.get(fileUrl, {
 			responseType: "arraybuffer",
 			timeout: 3e4
 		});
-		const base64Audio = Buffer.from(audioRes.data).toString("base64");
-		return (await axios.post(HAPUPPY_BASE, {
-			model: "gpt-4o-mini-transcribe",
-			messages: [{
-				role: "user",
-				content: [{
-					type: "input_audio",
-					input_audio: {
-						data: base64Audio,
-						format: "ogg"
-					}
-				}, {
-					type: "text",
-					text: "Transcribe this audio exactly. Output only the text."
-				}]
-			}]
-		}, {
-			timeout: 3e4,
+		tempFilePath = path.default.join(os.default.tmpdir(), `iris_voice_${Date.now()}.webm`);
+		fs.default.writeFileSync(tempFilePath, Buffer.from(audioRes.data));
+		cleanOldVoiceFiles();
+		console.log("[IRIS Voice] ✅ Saved as .webm:", tempFilePath);
+		const FormData = (await Promise.resolve().then(() => /* @__PURE__ */ __toESM(require_form_data()))).default;
+		const form = new FormData();
+		form.append("file", fs.default.createReadStream(tempFilePath), {
+			filename: "voice.webm",
+			contentType: "audio/webm"
+		});
+		form.append("model", MODEL_VOICE);
+		const transcript = (await axios.post(HAPUPPY_TRANSCRIBE, form, {
 			headers: {
 				Authorization: `Bearer ${apiKey}`,
-				"Content-Type": "application/json"
-			}
-		})).data?.choices?.[0]?.message?.content?.trim() || "";
+				...form.getHeaders()
+			},
+			timeout: 6e4,
+			maxBodyLength: Infinity,
+			maxContentLength: Infinity
+		})).data?.text?.trim() || "";
+		console.log("[IRIS Voice] 🎯 TRANSCRIPT:", transcript);
+		return transcript;
 	} catch (err) {
+		console.error("[IRIS Voice] ❌", err?.response?.data || err?.message);
 		return "";
+	} finally {
+		if (tempFilePath && fs.default.existsSync(tempFilePath)) try {
+			fs.default.unlinkSync(tempFilePath);
+		} catch {}
 	}
+}
+function cleanOldVoiceFiles() {
+	try {
+		const tmpDir = os.default.tmpdir();
+		const files = fs.default.readdirSync(tmpDir);
+		const oneHourAgo = Date.now() - 36e5;
+		files.forEach((file) => {
+			if (file.startsWith("iris_voice_")) {
+				const fullPath = path.default.join(tmpDir, file);
+				try {
+					if (fs.default.statSync(fullPath).mtimeMs < oneHourAgo) fs.default.unlinkSync(fullPath);
+				} catch {}
+			}
+		});
+	} catch {}
 }
 async function analyzePhoto(bot, fileId, botToken, apiKey, caption) {
 	try {
@@ -91599,8 +92828,12 @@ var IrisTelegramBot = class {
 			this.registerHandlers();
 			console.log("[IRIS Telegram] ✅ Bot online (HAPUPPY edition).");
 			console.log(`[IRIS Telegram] 🔑 Hapuppy key: ${source}`);
-			console.log(`[IRIS Telegram] 🎯 Chat model: ${MODEL_CHAT}`);
-			console.log(`[IRIS Telegram] 👁️ Vision model: ${MODEL_VISION}`);
+			console.log(`[IRIS Telegram] 💬 Chat: ${MODEL_CHAT}`);
+			console.log(`[IRIS Telegram] 🧠 Smart: ${MODEL_SMART}`);
+			console.log(`[IRIS Telegram] 💻 Code: ${MODEL_CODE}`);
+			console.log(`[IRIS Telegram] 🌐 Web: ${MODEL_WEB}`);
+			console.log(`[IRIS Telegram] 🔬 Research: ${MODEL_RESEARCH}`);
+			console.log(`[IRIS Telegram] 🎙️ Voice: ${MODEL_VOICE}`);
 			console.log(`[IRIS Telegram] 🛡️ Owner: ${this.ownerChatId || "OPEN"}`);
 			return { success: true };
 		} catch (err) {
@@ -91619,10 +92852,10 @@ var IrisTelegramBot = class {
 		if (!this.bot) return;
 		this.bot.onText(/\/start/, (msg) => {
 			const idInfo = this.ownerChatId === 0 ? `\n\n⚠️ Your Chat ID: \`${msg.chat.id}\`\nPaste in .env for security.` : "";
-			this.bot?.sendMessage(msg.chat.id, `👁️ *IRIS is online.*\n\n_Powered by Hapuppy AI proxy_\n\nSend text, voice, or photo and I'll execute.\n\n/status /help${idInfo}`, { parse_mode: "Markdown" });
+			this.bot?.sendMessage(msg.chat.id, `👁️ *IRIS is online, Sir.*\n\n_Powered by Hapuppy AI proxy_\n\nSend text, voice, or photo and I'll execute.\n\n/status /help${idInfo}`, { parse_mode: "Markdown" });
 		});
 		this.bot.onText(/\/help/, (msg) => {
-			this.bot?.sendMessage(msg.chat.id, `*Commands:*\n/start - Init\n/status - System info\n/help - This menu\n\nSend text/voice/photo to chat.`, { parse_mode: "Markdown" });
+			this.bot?.sendMessage(msg.chat.id, `*Commands:*\n/start - Init\n/status - System info\n/help - This menu\n\nSend text/voice/photo to chat.\n\n_Deep research takes 2-5 min._`, { parse_mode: "Markdown" });
 		});
 		this.bot.onText(/\/status/, async (msg) => {
 			if (!this.isAuthorized(msg.chat.id)) return;
@@ -91646,6 +92879,7 @@ var IrisTelegramBot = class {
 			const stopTyping = keepTyping(this.bot, chatId);
 			try {
 				if (msg.voice) {
+					await this.bot?.sendMessage(chatId, "🎙️ _Listening..._", { parse_mode: "Markdown" }).catch(() => {});
 					userText = await transcribeVoice(this.bot, msg.voice.file_id, this.botToken, this.apiKey);
 					if (!userText) {
 						stopTyping();
@@ -91669,8 +92903,10 @@ var IrisTelegramBot = class {
 					stopTyping();
 					return;
 				}
+				const selectedModel = pickBestModel(userText);
+				if (selectedModel === MODEL_RESEARCH) await this.bot?.sendMessage(chatId, "🔬 _Deep research initiated. Hold tight, 2-5 min..._", { parse_mode: "Markdown" }).catch(() => {});
 				const systemPrompt = await buildSystemPrompt(chatId);
-				const reply = await askHapuppy(userText, this.apiKey, systemPrompt);
+				const reply = await askHapuppy(userText, this.apiKey, systemPrompt, selectedModel);
 				stopTyping();
 				await this.sendChunkedMessage(chatId, reply);
 			} catch (err) {

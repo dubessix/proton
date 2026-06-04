@@ -1,6 +1,7 @@
 import { IpcMain, BrowserWindow } from 'electron'
 import { spawn } from 'child_process'
 import path from 'path'
+import os from 'os'
 
 export default function registerSystemControl(ipcMain: IpcMain) {
 
@@ -16,9 +17,28 @@ export default function registerSystemControl(ipcMain: IpcMain) {
 
       const win = BrowserWindow.getAllWindows()[0]
 
-      const child = spawn('powershell.exe', ['-Command', command], {
+      let shellPath: string
+      let shellArgs: string[]
+
+      if (os.platform() === 'win32') {
+        shellPath = 'powershell.exe'
+        shellArgs = ['-Command', command]
+      } else if (os.platform() === 'darwin') {
+        shellPath = '/bin/zsh'
+        shellArgs = ['-c', command]
+      } else {
+        shellPath = '/bin/bash'
+        shellArgs = ['-c', command]
+      }
+
+      const child = spawn(shellPath, shellArgs, {
         cwd: safeCwd,
-        stdio: ['ignore', 'pipe', 'pipe'] 
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          TERM: 'xterm-256color',
+          FORCE_COLOR: '1'
+        }
       })
 
       child.stdout.on('data', (data) => {

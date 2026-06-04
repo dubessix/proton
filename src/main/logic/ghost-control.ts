@@ -3,6 +3,7 @@ import { keyboard, Key, mouse, Point, Button } from '@nut-tree-fork/nut-js'
 import screenshot from 'screenshot-desktop'
 import loudness from 'loudness'
 import path from 'path'
+import os from 'os'
 import { exec } from 'child_process'
 
 keyboard.config.autoDelayMs = 20
@@ -85,8 +86,86 @@ function generateHumanPath(start: Point, end: Point): Point[] {
   return pathArray
 }
 
+async function setLinuxVolume(level: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    exec('which pactl', (err) => {
+      if (!err) {
+        exec(`pactl set-sink-volume @DEFAULT_SINK@ ${level}%`, (pactlErr) => {
+          if (!pactlErr) {
+            resolve(true)
+            return
+          }
+          tryAmixer()
+        })
+      } else {
+        tryAmixer()
+      }
+    })
+
+    function tryAmixer() {
+      exec('which amixer', (err) => {
+        if (!err) {
+          exec(`amixer -D pulse sset Master ${level}%`, (amixerErr) => {
+            if (!amixerErr) {
+              resolve(true)
+            } else {
+              exec(`amixer sset Master ${level}%`, (fallbackErr) => {
+                resolve(!fallbackErr)
+              })
+            }
+          })
+        } else {
+          resolve(false)
+        }
+      })
+    }
+  })
+}
+
+async function copyFileToClipboardLinux(filePath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    exec('which xclip', (xclipErr) => {
+      if (!xclipErr) {
+        const cmd = `echo -n "file://${filePath}" | xclip -selection clipboard -t text/uri-list`
+        exec(cmd, (err) => {
+          resolve(!err)
+        })
+        return
+      }
+
+      exec('which wl-copy', (wlErr) => {
+        if (!wlErr) {
+          const cmd = `echo -n "file://${filePath}" | wl-copy -t text/uri-list`
+          exec(cmd, (err) => {
+            resolve(!err)
+          })
+        } else {
+          resolve(false)
+        }
+      })
+    })
+  })
+}
+
+async function copyFileToClipboardMac(filePath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const cmd = `osascript -e 'set the clipboard to (POSIX file "${filePath}")'`
+    exec(cmd, (err) => {
+      resolve(!err)
+    })
+  })
+}
+
 export default function registerGhostControl(ipcMain: IpcMain) {
   ipcMain.handle('copy-file-to-clipboard', async (_event, filePath: string) => {
+    if (os.platform() === 'linux') {
+      return await copyFileToClipboardLinux(filePath)
+    }
+
+    if (os.platform() === 'darwin') {
+      return await copyFileToClipboardMac(filePath)
+    }
+
     return new Promise((resolve) => {
       const cmd = `powershell -command "Set-Clipboard -Path '${filePath}'"`
       exec(cmd, (error) => {
@@ -179,12 +258,18 @@ export default function registerGhostControl(ipcMain: IpcMain) {
 
   ipcMain.handle('set-volume', async (_event, level: number) => {
     try {
+      if (os.platform() === 'linux') {
+        const success = await setLinuxVolume(level)
+        return success ? `Volume ${level}%` : 'Error'
+      }
+
       await loudness.setVolume(level)
       return `Volume ${level}%`
     } catch (e) {
       return 'Error'
     }
   })
+
   ipcMain.handle('take-screenshot', async () => {
     try {
       const filename = `IRIS_Capture_${Date.now()}.png`

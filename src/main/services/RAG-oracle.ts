@@ -4,6 +4,17 @@ import path from 'path'
 import crypto from 'crypto'
 import { GoogleGenAI } from '@google/genai'
 import Groq from 'groq-sdk'
+import axios from 'axios'
+
+// ═══════════════════════════════════════════════════════════════════
+// 🌐 HAPUPPY CONFIG
+// ═══════════════════════════════════════════════════════════════════
+const HAPUPPY_BASE = 'https://beta.hapuppy.com/v1/chat/completions'
+const HAPUPPY_EMBED = 'https://beta.hapuppy.com/v1/embeddings'
+const MODEL_EMBED = 'text-embedding-3-small' // Cheap + accurate
+const MODEL_ANSWER = 'deepseek-v3.2' // Smart reasoning for code Q&A
+const EMBED_TIMEOUT = 30000
+const ANSWER_TIMEOUT = 60000
 
 const getStateDir = () => path.join(app.getPath('userData'), 'iris_scan_states')
 
@@ -22,8 +33,7 @@ const saveState = async (state: ScanState) => {
   try {
     await fs.mkdir(getStateDir(), { recursive: true })
     await fs.writeFile(getStateFilePath(state.dirPath), JSON.stringify(state, null, 2))
-  } catch (e) {
-  }
+  } catch (e) {}
 }
 
 const loadState = async (dirPath: string): Promise<ScanState | null> => {
@@ -54,21 +64,132 @@ const cosineSimilarity = (vecA: number[], vecB: number[]) => {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+// ═══════════════════════════════════════════════════════════════════
+// 🧠 SMART EMBEDDING (Gemini → Hapuppy fallback)
+// ═══════════════════════════════════════════════════════════════════
+async function smartEmbed(
+  texts: string[],
+  geminiKey: string | null,
+  taskType: 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY'
+): Promise<number[][]> {
+  // 🅰️ Try Gemini first (if key available)
+  if (geminiKey && geminiKey.trim()) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: geminiKey })
+      const response: any = await ai.models.embedContent({
+        model: 'gemini-embedding-001',
+        contents: texts,
+        config: { taskType }
+      })
+      return response.embeddings.map((e: any) => e.values)
+    } catch (err: any) {
+      console.warn('[RAG Oracle] ⚠️ Gemini embed failed → fallback Hapuppy:', err?.message)
+    }
+  }
+
+  // 🅱️ Fallback to Hapuppy text-embedding-3-small
+  const hapuppyKey = (process.env.HAPUPPY_API_KEY || '').trim()
+  if (!hapuppyKey) {
+    throw new Error('No embedding API available (no Gemini key + no HAPUPPY_API_KEY in .env)')
+  }
+
+  console.log('[RAG Oracle] 🅱️ Using Hapuppy embeddings...')
+
+  const response = await axios.post(
+    HAPUPPY_EMBED,
+    {
+      model: MODEL_EMBED,
+      input: texts
+    },
+    {
+      timeout: EMBED_TIMEOUT,
+      headers: {
+        Authorization: `Bearer ${hapuppyKey}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  )
+
+  return response.data?.data?.map((d: any) => d.embedding) || []
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 🧠 SMART ANSWER (Groq → Hapuppy DeepSeek fallback)
+// ═══════════════════════════════════════════════════════════════════
+async function smartAnswer(
+  contextText: string,
+  query: string,
+  groqKey: string | null
+): Promise<string> {
+  const systemPrompt =
+    "You are an elite coding assistant. Answer the user's question based ONLY on the provided codebase context. Give direct code snippets and explanations. Be concise."
+
+  // 🅰️ Try Groq first (if key available)
+  if (groqKey && groqKey.trim()) {
+    try {
+      console.log('[RAG Oracle] 🅰️ Using Groq Llama 3.1...')
+      const groq = new Groq({ apiKey: groqKey })
+      const chatCompletion = await groq.chat.completions.create({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Context:\n${contextText}\n\nQuestion: ${query}` }
+        ],
+        model: 'llama-3.1-8b-instant'
+      })
+      const answer = chatCompletion.choices[0]?.message?.content
+      if (answer) return answer
+      throw new Error('Empty Groq response')
+    } catch (err: any) {
+      console.warn('[RAG Oracle] ⚠️ Groq failed → fallback Hapuppy DeepSeek:', err?.message)
+    }
+  }
+
+  // 🅱️ Fallback to Hapuppy DeepSeek
+  const hapuppyKey = (process.env.HAPUPPY_API_KEY || '').trim()
+  if (!hapuppyKey) {
+    throw new Error('No answer API available (no Groq key + no HAPUPPY_API_KEY in .env)')
+  }
+
+  console.log('[RAG Oracle] 🅱️ Using Hapuppy DeepSeek...')
+
+  const response = await axios.post(
+    HAPUPPY_BASE,
+    {
+      model: MODEL_ANSWER,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Context:\n${contextText}\n\nQuestion: ${query}` }
+      ],
+      temperature: 0.3,
+      max_tokens: 2048
+    },
+    {
+      timeout: ANSWER_TIMEOUT,
+      headers: {
+        Authorization: `Bearer ${hapuppyKey}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  )
+
+  return response.data?.choices?.[0]?.message?.content?.trim() || 'No answer generated.'
+}
+
 export default function registerOracle({ ipcMain }: { ipcMain: IpcMain }) {
   ipcMain.handle('cancel-ingestion', () => {
     isCancelled = true
     return { success: true }
   })
 
+  // ════════════════════════════════════════════════════════════════
+  // 📚 INGEST CODEBASE (Memorize your code)
+  // ════════════════════════════════════════════════════════════════
   ipcMain.handle('ingest-codebase', async (event, { dirPath, geminiKey }) => {
     try {
-      if (!geminiKey) {
-        throw new Error('Missing Gemini API Key. Please configure it in the Command Center Vault.')
-      }
-
+      // 🧠 IRIS smart: Use Gemini if available, else Hapuppy
+      // (No throw if missing — fallback will handle it)
       const targetPath = path.normalize(dirPath.trim())
       isCancelled = false
-      const ai = new GoogleGenAI({ apiKey: geminiKey })
 
       const prevState = await loadState(targetPath)
       if (prevState) {
@@ -111,6 +232,7 @@ export default function registerOracle({ ipcMain }: { ipcMain: IpcMain }) {
           }
         }
       }
+
       event.sender.send('oracle-progress', {
         status: 'scanning',
         file: 'Initializing...',
@@ -164,13 +286,15 @@ export default function registerOracle({ ipcMain }: { ipcMain: IpcMain }) {
         }
 
         try {
-          const response: any = await ai.models.embedContent({
-            model: 'gemini-embedding-001',
-            contents: validChunks.map((chunk) => `File: ${fileName}\n\n${chunk}`),
-            config: { taskType: 'RETRIEVAL_DOCUMENT' }
-          })
-          response.embeddings.forEach((emb: any, idx: number) => {
-            vectorDB.push({ filePath: fullPath, chunk: validChunks[idx], embedding: emb.values })
+          // 🧠 Smart embedding (Gemini → Hapuppy fallback)
+          const embeddings = await smartEmbed(
+            validChunks.map((chunk) => `File: ${fileName}\n\n${chunk}`),
+            geminiKey || null,
+            'RETRIEVAL_DOCUMENT'
+          )
+
+          embeddings.forEach((emb, idx) => {
+            vectorDB.push({ filePath: fullPath, chunk: validChunks[idx], embedding: emb })
           })
 
           processedFiles.add(fullPath)
@@ -188,35 +312,35 @@ export default function registerOracle({ ipcMain }: { ipcMain: IpcMain }) {
             chunks: vectorDB.length
           })
           await sleep(3500)
-        } catch (apiError) {
+        } catch (apiError: any) {
+          console.warn(`[RAG Oracle] ⚠️ Skipping ${fileName}:`, apiError?.message)
           await sleep(5000)
         }
       }
 
       return { success: true, totalChunks: vectorDB.length, wasResumed: !!prevState }
-    } catch (err) {
-      return { success: false, error: String(err) }
+    } catch (err: any) {
+      console.error('[RAG Oracle] ❌ Ingest failed:', err?.message)
+      return { success: false, error: String(err?.message || err) }
     }
   })
 
+  // ════════════════════════════════════════════════════════════════
+  // 🔮 CONSULT ORACLE (Ask questions about ingested code)
+  // ════════════════════════════════════════════════════════════════
   ipcMain.handle('consult-oracle', async (_event, { query, geminiKey, groqKey }) => {
     try {
-      if (vectorDB.length === 0)
+      if (vectorDB.length === 0) {
         return { success: false, answer: 'Error: No files loaded into memory.' }
-
-      if (!geminiKey || !groqKey) {
-        throw new Error('Missing API Keys. Ensure both Gemini and Groq are configured in Settings.')
       }
 
-      const ai = new GoogleGenAI({ apiKey: geminiKey })
-      const groq = new Groq({ apiKey: groqKey })
+      // 🧠 Smart embedding (Gemini → Hapuppy fallback)
+      const queryEmbeddings = await smartEmbed([query], geminiKey || null, 'RETRIEVAL_QUERY')
+      const queryEmbedding = queryEmbeddings[0]
 
-      const queryResponse: any = await ai.models.embedContent({
-        model: 'gemini-embedding-001',
-        contents: query,
-        config: { taskType: 'RETRIEVAL_QUERY' }
-      })
-      const queryEmbedding = queryResponse.embeddings[0].values
+      if (!queryEmbedding) {
+        return { success: false, error: 'Failed to generate query embedding' }
+      }
 
       const rankedChunks = vectorDB
         .map((item) => ({ ...item, score: cosineSimilarity(queryEmbedding, item.embedding) }))
@@ -225,25 +349,17 @@ export default function registerOracle({ ipcMain }: { ipcMain: IpcMain }) {
 
       const contextText = rankedChunks.map((c) => `// File: ${c.filePath}\n${c.chunk}`).join('\n\n')
 
-      const chatCompletion = await groq.chat.completions.create({
-        messages: [
-          {
-            role: 'system',
-            content:
-              "You are an elite coding assistant. Answer the user's question based ONLY on the provided codebase context. Give direct code snippets and explanations. Be concise."
-          },
-          { role: 'user', content: `Context:\n${contextText}\n\nQuestion: ${query}` }
-        ],
-        model: 'llama-3.1-8b-instant'
-      })
+      // 🧠 Smart answer (Groq → Hapuppy DeepSeek fallback)
+      const answer = await smartAnswer(contextText, query, groqKey || null)
 
       return {
         success: true,
-        answer: chatCompletion.choices[0].message.content,
+        answer,
         scannedFiles: rankedChunks.map((c) => c.filePath)
       }
-    } catch (err) {
-      return { success: false, error: String(err) }
+    } catch (err: any) {
+      console.error('[RAG Oracle] ❌ Consult failed:', err?.message)
+      return { success: false, error: String(err?.message || err) }
     }
   })
 }

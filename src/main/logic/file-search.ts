@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import Groq from 'groq-sdk'
+import { exec } from 'child_process'
 
 let pipeline: any = null
 let lancedb: any = null
@@ -31,6 +32,14 @@ const getSystemPath = (name: string) => {
   }
 }
 
+const runCommand = (cmd: string): Promise<string> => {
+  return new Promise((resolve) => {
+    exec(cmd, (err, stdout) => {
+      resolve(err ? '' : stdout.trim())
+    })
+  })
+}
+
 async function getActiveDrives(): Promise<string[]> {
   if (os.platform() === 'win32') {
     const drives: string[] = []
@@ -45,7 +54,61 @@ async function getActiveDrives(): Promise<string[]> {
     }
     return drives.length > 0 ? drives : ['C:\\']
   }
-  return ['/']
+
+  if (os.platform() === 'linux') {
+    const drives = new Set<string>([os.homedir()])
+
+    try {
+      const home = os.homedir()
+      const commonDirs = ['Desktop', 'Documents', 'Downloads', 'Music', 'Pictures', 'Videos']
+      for (const dir of commonDirs) {
+        const fullPath = path.join(home, dir)
+        if (fs.existsSync(fullPath)) drives.add(fullPath)
+      }
+    } catch {}
+
+    try {
+      const username = os.userInfo().username
+      const mediaPath = `/media/${username}`
+      if (fs.existsSync(mediaPath)) {
+        const mounts = fs.readdirSync(mediaPath)
+        for (const mount of mounts) {
+          drives.add(path.join(mediaPath, mount))
+        }
+      }
+    } catch {}
+
+    try {
+      if (fs.existsSync('/mnt')) {
+        const mounts = fs.readdirSync('/mnt')
+        for (const mount of mounts) {
+          const fullPath = path.join('/mnt', mount)
+          try {
+            if (fs.statSync(fullPath).isDirectory()) {
+              drives.add(fullPath)
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+
+    return Array.from(drives)
+  }
+
+  if (os.platform() === 'darwin') {
+    const drives = new Set<string>([os.homedir()])
+    try {
+      if (fs.existsSync('/Volumes')) {
+        const volumes = fs.readdirSync('/Volumes')
+        for (const vol of volumes) {
+          drives.add(path.join('/Volumes', vol))
+        }
+      }
+    } catch {}
+    return Array.from(drives)
+  }
+
+  return [os.homedir()]
 }
 
 const IGNORE_FOLDERS = new Set([
@@ -57,7 +120,23 @@ const IGNORE_FOLDERS = new Set([
   'dist',
   'build',
   '.git',
-  '$recycle.bin'
+  '$recycle.bin',
+  '.cache',
+  '.local',
+  '.config',
+  '.npm',
+  '.yarn',
+  '.mozilla',
+  '.thunderbird',
+  '.gnome',
+  '.gradle',
+  '.m2',
+  'snap',
+  '.snap',
+  '.var',
+  '.steam',
+  '.wine',
+  'lost+found'
 ])
 
 export default function registerFileSearch(ipcMain: IpcMain) {
@@ -268,7 +347,11 @@ export default function registerFileSearch(ipcMain: IpcMain) {
           searchRoots.add(os.homedir())
           const drives = await getActiveDrives()
           drives.forEach((d) => {
-            if (!d.startsWith('C')) searchRoots.add(d)
+            if (os.platform() === 'win32') {
+              if (!d.startsWith('C')) searchRoots.add(d)
+            } else {
+              searchRoots.add(d)
+            }
           })
         }
 
@@ -278,6 +361,15 @@ export default function registerFileSearch(ipcMain: IpcMain) {
           text: `Native Sweeping Nested Folders...`,
           progress: 50
         })
+
+        if (os.platform() === 'linux' || os.platform() === 'darwin') {
+          const locateResults = await tryLocateCommand(searchParams.keywords)
+          if (locateResults.length > 0) {
+            nativeResultsText =
+              `⚡ NATIVE DEEP SYSTEM MATCHES:\n` + locateResults.slice(0, 15).join('\n')
+            return
+          }
+        }
 
         const foundFiles: string[] = []
         const queue: string[] = [...rootArray]
@@ -355,4 +447,33 @@ export default function registerFileSearch(ipcMain: IpcMain) {
       return `❌ System Error: ${String(err)}`
     }
   })
+}
+
+async function tryLocateCommand(keywords: string[]): Promise<string[]> {
+  try {
+    const which = await runCommand('which locate')
+    if (!which) return []
+
+    const mainKeyword = keywords[0]
+    if (!mainKeyword) return []
+
+    const output = await runCommand(`locate -i -l 50 "${mainKeyword}" 2>/dev/null`)
+    if (!output) return []
+
+    const results = output
+      .split('\n')
+      .filter((line) => {
+        const lowerLine = line.toLowerCase()
+        return keywords.every((kw) => lowerLine.includes(kw))
+      })
+      .filter((line) => {
+        const lower = line.toLowerCase()
+        return ![...IGNORE_FOLDERS].some((ignore) => lower.includes(`/${ignore}/`))
+      })
+      .slice(0, 15)
+
+    return results
+  } catch {
+    return []
+  }
 }

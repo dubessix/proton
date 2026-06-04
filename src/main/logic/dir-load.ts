@@ -31,7 +31,7 @@ const getFileType = (name: string, isDirectory: boolean) => {
   ]
   const imgExts = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp']
   const vidExts = ['.mp4', '.mkv', '.avi', '.mov', '.webm']
-  const execExts = ['.exe', '.msi', '.bat', '.sh', '.app', '.dmg']
+  const execExts = ['.exe', '.msi', '.bat', '.sh', '.app', '.dmg', '.deb', '.rpm', '.appimage', '.run']
 
   if (textExts.includes(ext)) return 'text'
   if (imgExts.includes(ext)) return 'image'
